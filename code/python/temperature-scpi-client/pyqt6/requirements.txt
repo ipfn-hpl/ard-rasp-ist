@@ -1,0 +1,11 @@
+sys
+serial
+pyqtgraph 
+numpy
+
+## On Linux Debian 12
+# python3-pyqt6
+# python3-pyqtgraph
+# python3-numpy
+# python3-serial
+# 
