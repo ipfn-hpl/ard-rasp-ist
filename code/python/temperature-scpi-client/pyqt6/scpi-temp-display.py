@@ -6,10 +6,11 @@ PyQt6 App for Display Arduiono SCPI Temperatures
 author:  B. Carvalho
 email: bernardo.carvalho@tecnico.ulisboa.pt
 """
-import sys
+import sys, argparse
 import serial
 import pyqtgraph as pg
 import numpy as np
+from datetime import datetime
 
 from PyQt6.QtCore import (
         QSize,
@@ -18,37 +19,50 @@ from PyQt6.QtCore import (
         )
 
 from PyQt6.QtWidgets import (
-    QButtonGroup,
+    # QButtonGroup,
     QWidget,
     QApplication,
-    # QLineEdit,
+    # QLineEdit, QTableView,
     QMainWindow,
-    # QTableView,
     QVBoxLayout,
     QHBoxLayout,
     QGridLayout,
     QDialog,
-    QDialogButtonBox,
-    # QCheckBox,
-    # QComboBox,
-    # QGroupBox,
-    QMessageBox,
+    # QDialogButtonBox, QCheckBox, QComboBox, QGroupBox, QMessageBox,
     QPushButton,
-    # QSpinBox,
-    # QRadioButton,
-    # QTabWidget,
+    # QSpinBox, QRadioButton, QTabWidget,
     QLabel,
 )
 
-PORT = '/dev/ttyUSB0'
+DEVICE = '/dev/ttyUSB0'
+# DEVICE = '/dev/cu.usbserial-58570026381'
 BAUDRATE = 57600
+
+
+def parseCommandLine():
+    """Use argparse to parse the command line for specifying
+    a device to use.
+    parser.add_argument("-f", "--file", type=str,
+        help="A path to a .qml file to be the source.",
+        required=True)
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--device', type=str,
+                        help='Serial device to use', default=DEVICE)
+    parser.add_argument('-s', '--samples', type=int,
+                        help='Number of samples to Show/Store', default=120)
+    args = vars(parser.parse_args())
+    return args
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Calorimeter Temperatures")
-        self.serialCon = serial.Serial(PORT, BAUDRATE, timeout=1)
+        args = parseCommandLine()  # Return command line arguments
+        dev = args['device']
+        # print('Dev: ' + dev)
+        self.serialCon = serial.Serial(dev, BAUDRATE, timeout=1)
         self.serialCon.reset_input_buffer()
         container = QWidget()
         layoutMain = QGridLayout()
@@ -63,10 +77,19 @@ class MainWindow(QMainWindow):
         layoutMain.addWidget(self.Tredlabel, 1, 0)
         self.Tbluelabel = QLabel('11.0')
         layoutMain.addWidget(self.Tbluelabel, 1, 1)
-        self.plotT = pg.PlotWidget(title="Plot")
-        layoutMain.addWidget(self.plotT, 2, 0, 1, 2)
-        self.TredArray = np.zeros(120) # Number of sample to store
-        self.TblueArray = np.zeros(120) # Number of sample to store
+        plotT = pg.PlotWidget(title="Plot")
+        layoutMain.addWidget(plotT, 2, 0, 1, 2)
+        samples = args['samples']  # Number of sample to store
+        self.TredArray = np.zeros(samples)
+        self.TblueArray = np.arange(samples)
+        self.CurveTred = plotT.plot(self.TredArray, pen='red')
+        self.CurveTblue = plotT.plot(self.TblueArray, pen='blue')
+        plotT.setYRange(0, 100)
+        # plotT.plot(self.TredArray)  # pen=({'color: red', 'width: 1'}), name="ch{1}")
+
+        saveBtn = QPushButton('Save Temp Data')
+        saveBtn.clicked.connect(self.save_data)
+        layoutMain.addWidget(saveBtn, 3, 0)
 
         container.setLayout(layoutMain)
         self.setMinimumSize(QSize(1200, 700))
@@ -77,6 +100,12 @@ class MainWindow(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_panels)
         self.timer.start(1000) # Sample Period in millisec
+
+    def save_data(self):
+        T_mat = np.array([self.TredArray, self.TblueArray])
+
+        filename = f"Temperature_log_{datetime.now():%Y-%m-%d_%H-%m-%d}.csv"
+        np.savetxt(filename, T_mat.T, delimiter=",")
 
     def get_temp(self, probe):
         p_str = f'{probe:d}'
@@ -90,34 +119,32 @@ class MainWindow(QMainWindow):
     def update_panels(self):
         try:
             # xdata.append((float(data[0]) - timeStart )/1000.0 )
-            tRed = self.get_temp(0)
+            # tRed = self.get_temp(0)
+            tRed = 1.1
             self.Tredlabel.setStyleSheet("font: 30pt; color: red; background-color: "
                                          "gray; border: 1px solid black")
             self.Tredlabel.setText(f'Tred: {tRed:.2f}')
-            self.TredArray[0] = tRed
             self.TredArray = np.roll(self.TredArray, -1)  # rotate circular buffer
-            self.plotT.clear()
-            self.plotT.setYRange(0, 100)
-            self.plotT.plot(self.TredArray)  #, pen=({'color: red', 'width: 1'}), name="ch{1}")
+            # self.TredArray[-1] = tRed
+            self.TredArray[-1] = self.TredArray[-2] + 1.1
+            self.CurveTred.setData(self.TredArray)
+            # self.plotT.clear()
+            # self.plotT.setYRange(0, 100)
+            # self.plotT.plot(self.TredArray)  #, pen=({'color: red', 'width: 1'}), name="ch{1}")
 
-            tBlue = self.get_temp(1)
+            # tBlue = self.get_temp(1)
+            tBlue = 1.2
             self.Tbluelabel.setText(f'{tBlue:.2f}')
 
         # if the try statement throws an error, just do nothing
         except: 
             print('Error reading Serial')
-"""
-#self.TredArray[0] = self.iter
-        #self.iter += 1
-        #self.TredArray = np.roll(self.TredArray, -1) # rotate circular buffer
-        #self.plotT.clear()
-        #self.plotT.setYRange(0, 50)
-        #self.plotT.plot(self.TredArray) # , pen=({'color: red', 'width: 1'}), name="ch{1}")
-"""
 
-app = QApplication(sys.argv)
-window = MainWindow()
-window.show()
-sys.exit(app.exec())
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
 
 # vim: syntax=python ts=4 sw=4 sts=4 sr et
