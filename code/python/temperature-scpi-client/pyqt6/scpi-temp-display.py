@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
-PyQt6 App for Display Arduiono SCPI Temperatures 
-author:  B. Carvalho
+PyQt6 App for Display Arduino SCPI Temperatures
+author:  B. Carvalho / IPFN-IST
 email: bernardo.carvalho@tecnico.ulisboa.pt
 """
-import sys, argparse
+import sys
+import argparse
 import serial
 import pyqtgraph as pg
 import numpy as np
@@ -14,7 +14,6 @@ from datetime import datetime
 
 from PyQt6.QtCore import (
         QSize,
-        # Qt,
         QTimer,
         )
 
@@ -35,8 +34,8 @@ from PyQt6.QtWidgets import (
 )
 
 DEVICE = '/dev/ttyUSB0'
-# DEVICE = '/dev/cu.usbserial-58570026381'
 BAUDRATE = 57600
+SAMPLE_PERIOD = 1000  # Sample Period in millisec
 
 
 def parseCommandLine():
@@ -51,6 +50,8 @@ def parseCommandLine():
                         help='Serial device to use', default=DEVICE)
     parser.add_argument('-s', '--samples', type=int,
                         help='Number of samples to Show/Store', default=120)
+    parser.add_argument('-u', '--simUl',
+                        action='store_true', help='Simulation')
     args = vars(parser.parse_args())
     return args
 
@@ -61,7 +62,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Calorimeter Temperatures")
         args = parseCommandLine()  # Return command line arguments
         dev = args['device']
-        # print('Dev: ' + dev)
+        self.simul = args['simUl']
+        print(self.simul)
         self.serialCon = serial.Serial(dev, BAUDRATE, timeout=1)
         self.serialCon.reset_input_buffer()
         container = QWidget()
@@ -80,11 +82,11 @@ class MainWindow(QMainWindow):
         plotT = pg.PlotWidget(title="Plot")
         layoutMain.addWidget(plotT, 2, 0, 1, 2)
         samples = args['samples']  # Number of sample to store
-        self.TredArray = np.zeros(samples)
-        self.TblueArray = np.arange(samples)
+        self.TredArray = 20.0 * np.ones(samples)
+        self.TblueArray = 17.0 * np.ones(samples)
         self.CurveTred = plotT.plot(self.TredArray, pen='red')
         self.CurveTblue = plotT.plot(self.TblueArray, pen='blue')
-        plotT.setYRange(0, 100)
+        plotT.setYRange(10, 105)
         # plotT.plot(self.TredArray)  # pen=({'color: red', 'width: 1'}), name="ch{1}")
 
         saveBtn = QPushButton('Save Temp Data')
@@ -99,7 +101,7 @@ class MainWindow(QMainWindow):
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_panels)
-        self.timer.start(1000) # Sample Period in millisec
+        self.timer.start(SAMPLE_PERIOD)  # Sample Period in millisec
 
     def save_data(self):
         T_mat = np.array([self.TredArray, self.TblueArray])
@@ -109,36 +111,39 @@ class MainWindow(QMainWindow):
 
     def get_temp(self, probe):
         p_str = f'{probe:d}'
-        command = b'MEAS:SCAL:TEMP:DS' + p_str.encode('utf-8') + b'?\n'
-        # print(command)
-        self.serialCon.write(command)
-        line = self.serialCon.readline()
-        print(line)
-        return float(line)
+        if self.simul:
+            return 20.0 + probe * 10.0 + 4.0 * np.random.random_sample()
+        else:
+            command = b'MEAS:SCAL:TEMP:DS' + p_str.encode('utf-8') + b'?\n'
+            # print(command)
+            self.serialCon.write(command)
+            line = self.serialCon.readline()
+            print(line)
+            return float(line)
 
     def update_panels(self):
+        # xdata.append((float(data[0]) - timeStart )/1000.0 )
         try:
-            # xdata.append((float(data[0]) - timeStart )/1000.0 )
-            # tRed = self.get_temp(0)
-            tRed = 1.1
+            tRed = self.get_temp(0)
             self.Tredlabel.setStyleSheet("font: 30pt; color: red; background-color: "
-                                         "gray; border: 1px solid black")
+                                            "gray; border: 1px solid black")
             self.Tredlabel.setText(f'Tred: {tRed:.2f}')
             self.TredArray = np.roll(self.TredArray, -1)  # rotate circular buffer
-            # self.TredArray[-1] = tRed
-            self.TredArray[-1] = self.TredArray[-2] + 1.1
+            self.TredArray[-1] = tRed
             self.CurveTred.setData(self.TredArray)
             # self.plotT.clear()
-            # self.plotT.setYRange(0, 100)
             # self.plotT.plot(self.TredArray)  #, pen=({'color: red', 'width: 1'}), name="ch{1}")
-
-            # tBlue = self.get_temp(1)
-            tBlue = 1.2
+            tBlue = self.get_temp(1)
             self.Tbluelabel.setText(f'{tBlue:.2f}')
+            self.TblueArray = np.roll(self.TblueArray, -1)  # rotate circular buffer
+            self.TblueArray[-1] = tBlue
+            self.CurveTblue.setData(self.TblueArray)
 
-        # if the try statement throws an error, just do nothing
-        except: 
-            print('Error reading Serial')
+        except ValueError:
+            print('error read value ')
+        except KeyboardInterrupt:
+            sys.exit()
+        #    print('Error reading Serial')
 
 
 if __name__ == "__main__":
