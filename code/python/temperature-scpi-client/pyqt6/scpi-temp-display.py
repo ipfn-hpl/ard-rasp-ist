@@ -51,7 +51,7 @@ def parseCommandLine():
     parser.add_argument('-s', '--samples', type=int,
                         help='Number of samples to Show/Store', default=120)
     parser.add_argument('-u', '--simUl',
-                        action='store_true', help='Simulation')
+                        action='store_true', help='Simulation Mode')
     args = vars(parser.parse_args())
     return args
 
