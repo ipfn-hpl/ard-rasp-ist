@@ -1,0 +1,6 @@
+influxdb_client
+matplotlib
+numpy
+pandas
+ipywidgets
+bokeh
