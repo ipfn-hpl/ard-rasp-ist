@@ -1,0 +1,27 @@
+[Unit]
+Description=Python Deamon to send data do InfluxDB
+After=syslog.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+# Environment="EPICS_CA_ADDR_LIST=192.168.0.22"
+Environment="INFLUXDB_TOKEN=2WgBGoULZiMXDekC3V3PKua2HTtLcmCuN52Bhr0JkROjt7-dKW1NFtCQC7YG1JctTvnkDMh8aZmztSx-4FLOaQ=="
+WorkingDirectory=/home/pi/git-repos/ard-rasp-ist/code/python/influxdb
+ExecStart=/home/pi/git-repos/ard-rasp-ist/code/python/influxdb/ds18b20-scpi-influxDB.py
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+#
+# See systemd log
+# journalctl -r -u epics-python-caput
+# journalctl -r -u ds18b20-scpi-influxDB
+#
+# Clean Log
+# du -hd1 /var/log/journal
+# journalctl --rotate
+# journalctl --vacuum-time 2d
+
