@@ -8,7 +8,9 @@
  */
 
 #include <Arduino.h>
-#include "M5StickCPlus2.h"
+#include <M5Unified.h>
+
+//#include "M5StickCPlus2.h"
 #include <WiFiMulti.h>
 
 // Include the libraries we need
@@ -96,13 +98,17 @@ DallasTemperature dt_oneWire(&oneWire);
 const int max_sensors = 8;
 DeviceAddress ds18Sensors[max_sensors];
 float sensorTemp[max_sensors];
+float sensorDiff = 0.0;
 
-DeviceAddress redThermometer  = {0x28, 0xC0, 0x48, 0x8B, 0xB0, 0x23, 0x09, 0xAF};
-DeviceAddress blueThermometer  = {0x28, 0x0E, 0x21, 0xBA, 0xB2, 0x23, 0x06, 0x08};
+//DeviceAddress redThermometer  = {0x28, 0xC0, 0x48, 0x8B, 0xB0, 0x23, 0x09, 0xAF};
+//DeviceAddress blueThermometer  = {0x28, 0x0E, 0x21, 0xBA, 0xB2, 0x23, 0x06, 0x08};
+DeviceAddress redThermometer  = {0x28, 0x46, 0x91, 0x46, 0xD4, 0xB7, 0x1F, 0x7D};
+DeviceAddress blueThermometer  = {0x28, 0x91, 0x8F, 0xCB, 0xB0, 0x23, 0x09, 0x25};
 
 uint8_t dsCount = 0;
+int state;
 
-const unsigned int samplingInterval = 2000; // how often to run the main loop (in ms)
+const unsigned int samplingInterval = 5000; // how often to run the main loop (in ms)
 unsigned long previousMillis = 0;
 
 // Function to convert voltage to percentage
@@ -118,7 +124,7 @@ int getStableBatteryPercentage() {
     int totalVoltage = 0;
 
     for (int i = 0; i < numReadings; i++) {
-        totalVoltage += StickCP2.Power.getBatteryVoltage();
+        totalVoltage += M5.Power.getBatteryVoltage();
         delay(10); // Small delay between readings
     }
 
@@ -136,7 +142,9 @@ void printDtAddress(DeviceAddress deviceAddress)
     // zero pad the address if necessary
     if (deviceAddress[i] < 16) Serial.print("0");
     Serial.print(deviceAddress[i], HEX);
+    Serial.print(", 0x");
   }
+    Serial.println("}");
 }
 // function to set a Dallas device address
 void cpyDtAddress(DeviceAddress dest, DeviceAddress src)
@@ -147,7 +155,7 @@ void cpyDtAddress(DeviceAddress dest, DeviceAddress src)
     }
 }
 
-bool setup_dallas(){
+bool init_dallas() {
 	bool ok = false;
 
     // Start up the DALLAS Temp library
@@ -166,6 +174,11 @@ bool setup_dallas(){
         Serial.println("ON");
     else 
 	    Serial.println("OFF");
+    return ok;
+}
+
+unsigned setup_dallas(){
+    unsigned int found = 0;
     if (!dt_oneWire.isConnected(redThermometer))
     {
         Serial.println("Unable to find Device 0 (red)");
@@ -175,6 +188,7 @@ bool setup_dallas(){
         dt_oneWire.setResolution(ds18Sensors[0], TEMPERATURE_PRECISION);
         Serial.print("Red Temp sensor, Resolution: ");
         Serial.println(dt_oneWire.getResolution(ds18Sensors[0]), DEC);
+        found++;
     }
     if (!dt_oneWire.isConnected(blueThermometer))
     {
@@ -185,8 +199,9 @@ bool setup_dallas(){
         dt_oneWire.setResolution(ds18Sensors[1], TEMPERATURE_PRECISION);
         Serial.print("Blue Temp sensor, Resolution: ");
         Serial.println(dt_oneWire.getResolution(ds18Sensors[1]), DEC);
+        found++;
     }
-    return ok;
+    return found;
 }
 
 bool connect_wifi() {
@@ -223,18 +238,51 @@ bool send_iflx_data() {
     return client.writePoint(iflx_sensor);
 }
 
+
+void update_display() {
+    // ColorLCD 135 x 240
+
+    if (!displayPaused) {
+        int percentage = getStableBatteryPercentage();
+        M5.Display.clear();
+        M5.Display.setCursor(0, 20);
+        M5.Display.printf("M5S BAT: %3d%%, %.2f V", percentage,
+                M5.Power.getBatteryVoltage()/1e3);
+        //StickCP2.Display.setTextSize(0.7);
+        //M5.Display.printf("%dmV",
+        M5.Display.setCursor(10, 40);
+        if(WiFiStatus == WL_CONNECTED) 
+            M5.Display.printf("WiFi: Connected");
+        else
+            M5.Display.printf("WiFi: %d", WiFiStatus);
+        M5.Display.setCursor(0, 60);
+        M5.Display.printf("Tr: %.2f Tb: %.2f ", sensorTemp[0], sensorTemp[1]);
+        if(sensorDiff != 0.0) 
+            M5.Display.printf("Eq");
+//        StickCP2.Display.printf("T0: %.2F T1: %.f\n", sensorTemp[0], sensorTemp[1]);
+        //StickCP2.Display.setTextSize(1);
+   }
+}
 void setup() {   
     bool ok = false;
     auto cfg = M5.config();
-    StickCP2.begin(cfg);
+    M5.begin(cfg);
     Serial.begin(115200);
     //Serial.println("M5StickCPlus2 initialized");
 
+    M5.Display.setBrightness(25);
+    M5.Display.setRotation(1);
+    M5.Display.setTextColor(GREEN);
+    //Text alignment middle_center means aligning the center of the text to the specified coordinate position.
+    M5.Display.setTextDatum(middle_center);
+    // StickCP2.Display.setFont(&fonts::Orbitron_Light_24);
+    M5.Display.setFont(&fonts::FreeSans9pt7b);
+    M5.Display.setTextSize(1);
+    update_display();
+
+    //delay(1000);
     Serial.println("Dallas Temperature Influx Client");
 
-    delay(1000);
-
-    setup_dallas();
 
     // connecting to a WiFi network
     for(int i = 0; i < NUM_SSID; i++) {
@@ -243,7 +291,7 @@ void setup() {
     ok = connect_wifi();
     // Add constant tags - only once
     if (ok) {
-        iflx_sensor.addTag("experiment", "calorimetry");
+        iflx_sensor.addTag("experiment", "calorimetryM5S");
 
         // Check server connection
         if (client.validateConnection()) {
@@ -255,41 +303,79 @@ void setup() {
         }
     }
 
-    StickCP2.Display.setBrightness(25);
-    StickCP2.Display.setRotation(1);
-    StickCP2.Display.setTextColor(GREEN);
-    StickCP2.Display.setTextDatum(middle_center);
-    // StickCP2.Display.setFont(&fonts::Orbitron_Light_24);
-    StickCP2.Display.setFont(&fonts::FreeSans9pt7b);
-    StickCP2.Display.setTextSize(1);
+    init_dallas();
+    if (setup_dallas() == 0){
+        if (!dt_oneWire.getAddress(ds18Sensors[0], 0))
+            Serial.println("Unable to find address for Device 0");
+        Serial.println("Device 0");
+        printDtAddress(ds18Sensors[0]);
+        if (!dt_oneWire.getAddress(ds18Sensors[1], 1))
+            Serial.println("Unable to find address for Device 1");
+        Serial.println("Device 1");
+        printDtAddress(ds18Sensors[1]);
+    }
 
 }
 
-void update_display () {
-    // ColorLCD 135 x 240
-
-    if (!displayPaused) {
-        int percentage = getStableBatteryPercentage();
-        StickCP2.Display.clear();
-        StickCP2.Display.setCursor(10, 20);
-        StickCP2.Display.printf("BAT: %d%%", percentage);
-        StickCP2.Display.setCursor(120, 20);
-        //StickCP2.Display.setTextSize(0.7);
-        StickCP2.Display.printf("%dmV", StickCP2.Power.getBatteryVoltage());
-        StickCP2.Display.setCursor(10, 40);
-        StickCP2.Display.printf("WiFi: %d", WiFiStatus);
-        StickCP2.Display.setCursor(10, 60);
-        StickCP2.Display.printf("T0: %.2f C", sensorTemp[0]);
-        StickCP2.Display.setCursor(120, 60);
-        StickCP2.Display.printf("T1: %.2f C", sensorTemp[1]);
-//        StickCP2.Display.printf("T0: %.2F T1: %.f\n", sensorTemp[0], sensorTemp[1]);
-        //StickCP2.Display.setTextSize(1);
-   }
-}
 void loop() {
     unsigned long currentMillis = millis();
+    static constexpr const int colors[] = { TFT_WHITE, TFT_CYAN, TFT_RED, TFT_YELLOW, TFT_BLUE, TFT_GREEN };
+    static constexpr const char* const names[] = { "none", "wasHold", "wasClicked", "wasPressed", "wasReleased", "wasDeciedCount" };
+
     // my_instrument.ProcessInput(Serial, "\n");
-    StickCP2.update(); // Update button states
+    //StickCP2.update(); // Update button states
+    M5.update(); // Update button states
+    /*                   // 
+                         if (StickCP2.BtnA.wasPressed()) {
+                         displayPaused = !displayPaused; // Toggle display update state
+                                                         //Serial.print("StickCP2.BtnA.wasPressed ");
+                                                         }
+                                                         if (StickCP2.BtnB.wasClicked()) {
+                                                         StickCP2.Display.clear();
+                                                         StickCP2.Speaker.tone(8000, 20);
+                                                         }
+    */
+    state = M5.BtnA.wasHold() ? 1
+        : M5.BtnA.wasClicked() ? 2
+        : M5.BtnA.wasPressed() ? 3
+        : M5.BtnA.wasReleased() ? 4
+        : M5.BtnA.wasDecideClickCount() ? 5
+        : 0;
+    if (state)
+    {
+        //M5_LOGI("BtnB:%s  count:%d", names[state], M5.BtnB.getClickCount());
+        M5_LOGI("BtnA:%s  count:%d", names[state], M5.BtnA.getClickCount());
+        //M5.Display.fillRect(w*2, 0, w-1, h, colors[state]);
+        M5.Display.setCursor(state * 10, 80);
+        M5.Display.printf("%d", state);
+        if (state == 1)
+         sensorDiff = dt_oneWire.getTempC(ds18Sensors[1]) - dt_oneWire.getTempC(ds18Sensors[0]);
+    }
+    state = M5.BtnB.wasHold() ? 1
+        : M5.BtnB.wasClicked() ? 2
+        : M5.BtnB.wasPressed() ? 3
+        : M5.BtnB.wasReleased() ? 4
+        : M5.BtnB.wasDecideClickCount() ? 5
+        : 0;
+    if (state)
+    {
+        M5_LOGI("BtnB:%s  count:%d", names[state], M5.BtnB.getClickCount());
+        M5.Display.setCursor(state * 10, 100);
+        M5.Display.printf("%d", state);
+    }
+
+    state = M5.BtnC.wasHold() ? 1
+        : M5.BtnC.wasClicked() ? 2
+        : M5.BtnC.wasPressed() ? 3
+        : M5.BtnC.wasReleased() ? 4
+        : M5.BtnC.wasDecideClickCount() ? 5
+        : 0;
+    if (state)
+    {
+        M5_LOGI("BtnC:%s  count:%d", names[state], M5.BtnC.getClickCount());
+        M5.Display.setCursor(state * 10, 120);
+        M5.Display.printf("%d", state);
+    }
 
     if (currentMillis - previousMillis > samplingInterval) {
         previousMillis += samplingInterval;
@@ -297,31 +383,26 @@ void loop() {
         WiFiStatus = wifiMulti.run();
         dt_oneWire.requestTemperatures();
         sensorTemp[0] = dt_oneWire.getTempC(ds18Sensors[0]);
-        Serial.print("Temp0 C: ");
-        Serial.print(sensorTemp[0]);
-        sensorTemp[1] = dt_oneWire.getTempC(ds18Sensors[1]);
-        Serial.print(", Temp1 C: ");
-        Serial.println(sensorTemp[1]);
+        //Serial.print("red C: ");
+        //Serial.print(sensorTemp[0]);
+        sensorTemp[1] = dt_oneWire.getTempC(ds18Sensors[1]) - sensorDiff; 
+        //Serial.print(", blue C: ");
+    //Serial.println(sensorTemp[1]);
+        M5_LOGI("Tred %.2f  Tblue: %.2f", sensorTemp[0], sensorTemp[1]);
         update_display();
 
-        if (wifiMulti.run() != WL_CONNECTED) {
-            Serial.println("Wifi connection lost");
+        if (wifiMulti.run() == WL_CONNECTED) {
+            // Write point
+            if (!send_iflx_data()) {
+                Serial.print("InfluxDB write failed: ");
+                Serial.println(client.getLastErrorMessage());
+            }
         }
-        // Write point
-        if (!send_iflx_data()) {
-            Serial.print("InfluxDB write failed: ");
-            Serial.println(client.getLastErrorMessage());
+        else {
+            Serial.println("Wifi connection lost");
+            connect_wifi();
         }
 
     }
-    // if (StickCP2.BtnB.wasClicked()) {
-    //     StickCP2.Display.clear();
-    //     // StickCP2.Speaker.tone(8000, 20);
-    // }
-
-    // if (StickCP2.BtnA.wasPressed()) {
-    //     displayPaused = !displayPaused; // Toggle display update state
-    // }
-
 }
 //  vim: syntax=cpp ts=4 sw=4 sts=4 sr et
