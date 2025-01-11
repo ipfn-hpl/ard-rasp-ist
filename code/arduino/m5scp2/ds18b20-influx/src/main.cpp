@@ -80,7 +80,8 @@ typedef enum {
 
 */
 
-SCPI_Parser my_instrument;
+SCPI_Parser esp32_instrument;
+
 
 // Data wire is plugged into port G33 on the M5Stick
 #define ONE_WIRE_BUS 33
@@ -105,6 +106,7 @@ uint8_t dsCount = 0;
 const unsigned int samplingInterval = 2000; // how often to run the main loop (in ms)
 unsigned long previousMillis = 0;
 
+void update_display();
 // Function to convert voltage to percentage
 int voltageToPercentage(int voltage)
 {
@@ -145,6 +147,31 @@ void cpyDtAddress(DeviceAddress dest, DeviceAddress src)
     {
         dest[i] = src[i];
     }
+}
+
+void Identify(SCPI_C commands, SCPI_P parameters, Stream& interface) {
+  interface.println(F("IPFN,SCPI ESP32 Thermo,#00," VREKRER_SCPI_VERSION));  
+  //*IDN? Suggested return string should be in the following format:
+  // "<vendor>,<model>,<serial number>,<firmware>"
+}
+
+bool setup_scpi(){
+    bool ok = true;
+    /*
+       To fix hash crashes, the hashing magic numbers can be changed before 
+       registering commands.
+       Use prime numbers up to the SCPI_HASH_TYPE size.
+       */
+    esp32_instrument.hash_magic_number = 37; //Default value = 37
+    esp32_instrument.hash_magic_offset = 7;  //Default value = 7
+
+    /*
+       Timeout time can be changed even during program execution
+       See Error_Handling example for further details.
+       */
+    esp32_instrument.timeout = 10; //value in miliseconds. Default value = 10
+    esp32_instrument.RegisterCommand(F("*IDN?"), &Identify);
+    return ok;
 }
 
 bool setup_dallas(){
@@ -208,10 +235,14 @@ bool connect_wifi() {
             break;
         }
     }
+    if (ret) {
     // Accurate time is necessary for certificate validation and writing in batches
     // We use the NTP servers in your area as provided by: https://www.pool.ntp.org/zone/
     // Syncing progress and the time will be printed to Serial.
-    timeSync(TZ_INFO, "ntp1.tecnico.ulisboa.pt", "pool.ntp.org");
+        timeSync(TZ_INFO, "ntp1.tecnico.ulisboa.pt", "pool.ntp.org");
+    }
+    else
+        Serial.println(" Fail to connect WiF, giving up.");
     return ret;
 }
 
@@ -227,6 +258,14 @@ void setup() {
     bool ok = false;
     auto cfg = M5.config();
     StickCP2.begin(cfg);
+    StickCP2.Display.setBrightness(25);
+    StickCP2.Display.setRotation(1);
+    StickCP2.Display.setTextColor(GREEN);
+    StickCP2.Display.setTextDatum(middle_center);
+    // StickCP2.Display.setFont(&fonts::Orbitron_Light_24);
+    StickCP2.Display.setFont(&fonts::FreeSans9pt7b);
+    StickCP2.Display.setTextSize(1);
+    update_display();
     Serial.begin(115200);
     //Serial.println("M5StickCPlus2 initialized");
 
@@ -235,6 +274,7 @@ void setup() {
     delay(1000);
 
     setup_dallas();
+    setup_scpi();
 
     // connecting to a WiFi network
     for(int i = 0; i < NUM_SSID; i++) {
@@ -243,7 +283,7 @@ void setup() {
     ok = connect_wifi();
     // Add constant tags - only once
     if (ok) {
-        iflx_sensor.addTag("experiment", "calorimetry");
+        iflx_sensor.addTag("experiment", "calorimetryEsp32");
 
         // Check server connection
         if (client.validateConnection()) {
@@ -255,17 +295,9 @@ void setup() {
         }
     }
 
-    StickCP2.Display.setBrightness(25);
-    StickCP2.Display.setRotation(1);
-    StickCP2.Display.setTextColor(GREEN);
-    StickCP2.Display.setTextDatum(middle_center);
-    // StickCP2.Display.setFont(&fonts::Orbitron_Light_24);
-    StickCP2.Display.setFont(&fonts::FreeSans9pt7b);
-    StickCP2.Display.setTextSize(1);
-
 }
 
-void update_display () {
+void update_display() {
     // ColorLCD 135 x 240
 
     if (!displayPaused) {
@@ -277,7 +309,11 @@ void update_display () {
         //StickCP2.Display.setTextSize(0.7);
         StickCP2.Display.printf("%dmV", StickCP2.Power.getBatteryVoltage());
         StickCP2.Display.setCursor(10, 40);
-        StickCP2.Display.printf("WiFi: %d", WiFiStatus);
+        if (WiFiStatus == WL_CONNECTED) 
+            StickCP2.Display.printf("WiFi: Connected");
+        else
+            StickCP2.Display.printf("WiFi: %d", WiFiStatus);
+
         StickCP2.Display.setCursor(10, 60);
         StickCP2.Display.printf("T0: %.2f C", sensorTemp[0]);
         StickCP2.Display.setCursor(120, 60);
@@ -288,27 +324,29 @@ void update_display () {
 }
 void loop() {
     unsigned long currentMillis = millis();
-    // my_instrument.ProcessInput(Serial, "\n");
+    esp32_instrument.ProcessInput(Serial, "\n");
     StickCP2.update(); // Update button states
-
+    static int count_loop;
     if (currentMillis - previousMillis > samplingInterval) {
         previousMillis += samplingInterval;
         // call sensors.requestTemperatures() to issue a global temperature
         WiFiStatus = wifiMulti.run();
         dt_oneWire.requestTemperatures();
         sensorTemp[0] = dt_oneWire.getTempC(ds18Sensors[0]);
-        Serial.print("Temp0 C: ");
-        Serial.print(sensorTemp[0]);
         sensorTemp[1] = dt_oneWire.getTempC(ds18Sensors[1]);
-        Serial.print(", Temp1 C: ");
-        Serial.println(sensorTemp[1]);
         update_display();
+        if ((count_loop++) %10 == 0) {
+            Serial.print("Temp0 C: ");
+            Serial.print(sensorTemp[0]);
+            Serial.print(", Temp1 C: ");
+            Serial.println(sensorTemp[1]);
+        }
 
-        if (wifiMulti.run() != WL_CONNECTED) {
+        if (WiFiStatus != WL_CONNECTED) {
             Serial.println("Wifi connection lost");
         }
+        else if (!send_iflx_data()) {
         // Write point
-        if (!send_iflx_data()) {
             Serial.print("InfluxDB write failed: ");
             Serial.println(client.getLastErrorMessage());
         }

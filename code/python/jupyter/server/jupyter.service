@@ -1,0 +1,15 @@
+[Unit]
+Description=Jupyter Notebook
+
+[Service]
+Type=simple
+PIDFile=/run/jupyter.pid
+ExecStart=/home/esther/.local/python-pip/bin/jupyter notebook --config=/home/esther/.jupyter/jupyter_notebook_config.py
+User=esther
+Group=esther
+WorkingDirectory=/home/esther/git-repos/ard-rasp-ist
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
