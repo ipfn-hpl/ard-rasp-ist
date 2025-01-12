@@ -98,8 +98,11 @@ const int max_sensors = 8;
 DeviceAddress ds18Sensors[max_sensors];
 float sensorTemp[max_sensors];
 
-DeviceAddress redThermometer  = {0x28, 0xC0, 0x48, 0x8B, 0xB0, 0x23, 0x09, 0xAF};
-DeviceAddress blueThermometer  = {0x28, 0x0E, 0x21, 0xBA, 0xB2, 0x23, 0x06, 0x08};
+//DeviceAddress redThermometer  = {0x28, 0xC0, 0x48, 0x8B, 0xB0, 0x23, 0x09, 0xAF};
+//DeviceAddress blueThermometer  = {0x28, 0x0E, 0x21, 0xBA, 0xB2, 0x23, 0x06, 0x08};
+DeviceAddress redThermometer  =  {0x28, 0x46, 0x91, 0x46, 0xD4, 0xB7, 0x1F, 0x7D};
+DeviceAddress blueThermometer  = {0x28, 0x91, 0x8F, 0xCB, 0xB0, 0x23, 0x9, 0x25};
+
 
 uint8_t dsCount = 0;
 
@@ -137,8 +140,11 @@ void printDtAddress(DeviceAddress deviceAddress)
   {
     // zero pad the address if necessary
     if (deviceAddress[i] < 16) Serial.print("0");
+    Serial.print("0x");
     Serial.print(deviceAddress[i], HEX);
+    Serial.print(", ");
   }
+  Serial.println(" ");
 }
 // function to set a Dallas device address
 void cpyDtAddress(DeviceAddress dest, DeviceAddress src)
@@ -186,7 +192,17 @@ bool setup_dallas(){
     Serial.print(dsCount, DEC);
     Serial.println(" devices.");
     ok = (dsCount > 0u);
+     // Searrch method 1: by index
+    if (!dt_oneWire.getAddress(ds18Sensors[0], 0))
+        Serial.println("Unable to find address for Device 0");
+    else
+     printDtAddress(ds18Sensors[0]);
 
+    if (!dt_oneWire.getAddress(ds18Sensors[1], 1)) Serial.println("Unable to find address for Device 1");
+    else
+     printDtAddress(ds18Sensors[1]);
+
+ 
     // report parasite power requirements
     Serial.print("Parasite power is: ");
     if (dt_oneWire.isParasitePowerMode())
