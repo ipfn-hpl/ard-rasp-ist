@@ -8,7 +8,8 @@
  */
 
 #include <Arduino.h>
-#include "M5StickCPlus2.h"
+// #include "M5StickCPlus2.h"
+#include <M5Unified.h>
 #include <WiFiMulti.h>
 
 // Include the libraries we need
@@ -97,16 +98,17 @@ DallasTemperature dt_oneWire(&oneWire);
 const int max_sensors = 8;
 DeviceAddress ds18Sensors[max_sensors];
 float sensorTemp[max_sensors];
+float sensorDiff = 0.0;
+int buttonState;
 
 //DeviceAddress redThermometer  = {0x28, 0xC0, 0x48, 0x8B, 0xB0, 0x23, 0x09, 0xAF};
 //DeviceAddress blueThermometer  = {0x28, 0x0E, 0x21, 0xBA, 0xB2, 0x23, 0x06, 0x08};
 DeviceAddress redThermometer  =  {0x28, 0x46, 0x91, 0x46, 0xD4, 0xB7, 0x1F, 0x7D};
 DeviceAddress blueThermometer  = {0x28, 0x91, 0x8F, 0xCB, 0xB0, 0x23, 0x9, 0x25};
 
-
 uint8_t dsCount = 0;
 
-const unsigned int samplingInterval = 2000; // how often to run the main loop (in ms)
+const unsigned int samplingInterval = 5000; // how often to run the main loop (in ms)
 unsigned long previousMillis = 0;
 
 void update_display();
@@ -123,7 +125,7 @@ int getStableBatteryPercentage() {
     int totalVoltage = 0;
 
     for (int i = 0; i < numReadings; i++) {
-        totalVoltage += StickCP2.Power.getBatteryVoltage();
+        totalVoltage += M5.Power.getBatteryVoltage();
         delay(10); // Small delay between readings
     }
 
@@ -180,72 +182,69 @@ bool setup_scpi(){
     return ok;
 }
 
-bool setup_dallas(){
-	bool ok = false;
+bool init_dallas() {
+    bool ok = false;
 
     // Start up the DALLAS Temp library
     dt_oneWire.begin();
-     // locate devices on the bus
-    Serial.print("Locating devices...");
-    Serial.print("Found ");
+    // locate devices on the bus
+    M5_LOGI("Locating devices...");
+    M5_LOGI("Found ");
     dsCount = dt_oneWire.getDeviceCount();
     Serial.print(dsCount, DEC);
-    Serial.println(" devices.");
+    M5_LOGI(" devices.");
     ok = (dsCount > 0u);
-     // Searrch method 1: by index
-    if (!dt_oneWire.getAddress(ds18Sensors[0], 0))
-        Serial.println("Unable to find address for Device 0");
-    else
-     printDtAddress(ds18Sensors[0]);
 
-    if (!dt_oneWire.getAddress(ds18Sensors[1], 1)) Serial.println("Unable to find address for Device 1");
-    else
-     printDtAddress(ds18Sensors[1]);
-
- 
     // report parasite power requirements
-    Serial.print("Parasite power is: ");
+    M5_LOGI("Parasite power is: ");
     if (dt_oneWire.isParasitePowerMode())
-        Serial.println("ON");
-    else 
-	    Serial.println("OFF");
+        M5_LOGI("ON\n");
+    else
+        M5_LOGI("OFF\n");
+    return ok;
+}
+
+unsigned setup_dallas(){
+    unsigned int found = 0;
     if (!dt_oneWire.isConnected(redThermometer))
     {
-        Serial.println("Unable to find Device 0 (red)");
+            M5_LOGE("Unable to find Device 0 (red)");
     }
     else {
         cpyDtAddress(ds18Sensors[0], redThermometer);
         dt_oneWire.setResolution(ds18Sensors[0], TEMPERATURE_PRECISION);
         Serial.print("Red Temp sensor, Resolution: ");
         Serial.println(dt_oneWire.getResolution(ds18Sensors[0]), DEC);
+        found++;
     }
     if (!dt_oneWire.isConnected(blueThermometer))
     {
-        Serial.println("Unable to find Device 1 (blue)");
+            M5_LOGE("Unable to find Device 1 (blue)");
     }
     else {
         cpyDtAddress(ds18Sensors[1], blueThermometer);
         dt_oneWire.setResolution(ds18Sensors[1], TEMPERATURE_PRECISION);
         Serial.print("Blue Temp sensor, Resolution: ");
         Serial.println(dt_oneWire.getResolution(ds18Sensors[1]), DEC);
+        found++;
     }
-    return ok;
+    return found;
 }
 
 bool connect_wifi() {
 	bool ret = false;
-    Serial.print(", Waiting for WiFi... ");
+    M5_LOGI(", Waiting for WiFi... ");
     for(int i = 0; i < WIFI_RETRIES; i++) {
         if(wifiMulti.run() != WL_CONNECTED) {
             //while(wifiMulti.run() != WL_CONNECTED) {
-            Serial.print(".");
+            M5_LOGW(".");
             delay(500);
         }
         else {
-            Serial.print(". WiFi connected. ");
-            Serial.print("IP address: ");
+            M5_LOGI(". WiFi connected. ");
+            M5_LOGI("IP address: ");
             IPAddress ip = WiFi.localIP();
-            Serial.println(ip);
+            M5_LOGI("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
             //M5.Display.print("WiFi connected.");
             ret = true;
             break;
@@ -258,7 +257,7 @@ bool connect_wifi() {
         timeSync(TZ_INFO, "ntp1.tecnico.ulisboa.pt", "pool.ntp.org");
     }
     else
-        Serial.println(" Fail to connect WiF, giving up.");
+        M5_LOGE(" Fail to connect WiF, giving up.");
     return ret;
 }
 
@@ -272,34 +271,64 @@ bool send_iflx_data() {
 
 void setup() {   
     bool ok = false;
+#if defined ( ESP_PLATFORM )
+    ESP_LOGE("TAG", "using ESP_LOGE error log.");    // Critical errors, software module can not recover on its own
+    ESP_LOGW("TAG", "using ESP_LOGW warn log.");     // Error conditions from which recovery measures have been taken
+    ESP_LOGI("TAG", "using ESP_LOGI info log.");     // Information messages which describe normal flow of events
+    ESP_LOGD("TAG", "using ESP_LOGD debug log.");    // Extra information which is not necessary for normal use (values, pointers, sizes, etc).
+    ESP_LOGV("TAG", "using ESP_LOGV verbose log.");  // Bigger chunks of debugging information, or frequent messages which can potentially flood the output.
+#endif
     auto cfg = M5.config();
-    StickCP2.begin(cfg);
-    StickCP2.Display.setBrightness(25);
-    StickCP2.Display.setRotation(1);
-    StickCP2.Display.setTextColor(GREEN);
-    StickCP2.Display.setTextDatum(middle_center);
-    // StickCP2.Display.setFont(&fonts::Orbitron_Light_24);
-    StickCP2.Display.setFont(&fonts::FreeSans9pt7b);
-    StickCP2.Display.setTextSize(1);
-    update_display();
+    M5.begin(cfg);
     Serial.begin(115200);
-    //Serial.println("M5StickCPlus2 initialized");
+    M5.Display.setBrightness(25);
+    M5.Display.setRotation(1);
+    M5.Display.setTextColor(GREEN);
+    //Text alignment middle_center means aligning the center of the text to the specified coordinate position.
 
-    Serial.println("Dallas Temperature Influx Client");
+    M5.Display.setTextDatum(middle_center);
+    M5.Display.setFont(&fonts::FreeSans9pt7b);
+    M5.Display.setTextSize(1);
+    update_display();
+    /// You can set Log levels for each output destination.
+/// ESP_LOG_ERROR / ESP_LOG_WARN / ESP_LOG_INFO / ESP_LOG_DEBUG / ESP_LOG_VERBOSE
+  M5.Log.setLogLevel(m5::log_target_serial, ESP_LOG_VERBOSE);
+  //M5.Log.setLogLevel(m5::log_target_display, ESP_LOG_DEBUG);
+  //M5.Log.setLogLevel(m5::log_target_callback, ESP_LOG_INFO);
+  /// You can color the log or not.
+    M5.Log.setEnableColor(m5::log_target_serial, true);
 
-    delay(1000);
+    M5_LOGI("M5_LOGI info log");      /// INFO level output with source info
 
-    setup_dallas();
-    setup_scpi();
 
-    // connecting to a WiFi network
-    for(int i = 0; i < NUM_SSID; i++) {
-        wifiMulti.addAP(ssids[i], pass[i]);
-    }
+    /// `M5.Log.printf()` is output without log level and without suffix and is output to all serial, display, and callback.
+    M5.Log.printf("M5.Log.printf non level output\n");
+    //Serial.println("Dallas Temperature Influx Client");
+
+    //delay(1000);
+
+    //setup_scpi();
+
+    M5_LOGI("Connecting to Rpi Wifi..");
+    wifiMulti.addAP("Labuino-rpi5", "Arduino25");
+    // connecting to  WiFi network
     ok = connect_wifi();
+    if (ok) {
+        Serial.println("Rpi Wifi OK");
+    }
+    else {
+        M5_LOGW("Rpi Wifi Failed. Trying others.");
+         // clears the current list of Multi APs and frees the memory
+        //wifiMulti.APlistClean();
+
+        for(int i = 0; i < NUM_SSID; i++) {
+            wifiMulti.addAP(ssids[i], pass[i]);
+        }
+        ok = connect_wifi();
+    }
     // Add constant tags - only once
     if (ok) {
-        iflx_sensor.addTag("experiment", "calorimetryEsp32");
+        iflx_sensor.addTag("experiment", "calorimetryM5S");
 
         // Check server connection
         if (client.validateConnection()) {
@@ -310,9 +339,20 @@ void setup() {
             Serial.println(client.getLastErrorMessage());
         }
     }
+    init_dallas();
+    if (setup_dallas() == 0){
+        if (!dt_oneWire.getAddress(ds18Sensors[0], 0))
+            Serial.println("Unable to find address for Device 0");
+        Serial.println("Device 0");
+        printDtAddress(ds18Sensors[0]);
+        if (!dt_oneWire.getAddress(ds18Sensors[1], 1))
+            Serial.println("Unable to find address for Device 1");
+        Serial.println("Device 1");
+        printDtAddress(ds18Sensors[1]);
+    }
 
 }
-
+/*
 void update_display() {
     // ColorLCD 135 x 240
 
@@ -338,10 +378,112 @@ void update_display() {
         //StickCP2.Display.setTextSize(1);
    }
 }
+*/
+void update_display() {
+    // ColorLCD 135 x 240
+
+    if (!displayPaused) {
+        int percentage = getStableBatteryPercentage();
+        M5.Display.clear();
+        M5.Display.setCursor(0, 20);
+        M5.Display.printf("M5S BAT: %3d%%, %.2f V", percentage,
+                M5.Power.getBatteryVoltage()/1e3);
+        //M5.Display.printf("%dmV",
+        M5.Display.setCursor(10, 40);
+        if(WiFiStatus == WL_CONNECTED) {
+            M5.Display.printf("WiFi: Connected ");
+            IPAddress ip = WiFi.localIP();
+            //M5.Display.printf(" %s", ip.toString());
+            M5.Display.printf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+        }
+        else
+            M5.Display.printf("WiFi: %d", WiFiStatus);
+        M5.Display.setCursor(0, 60);
+        M5.Display.printf("Tr: %.2f Tb: %.2f ", sensorTemp[0], sensorTemp[1]);
+        if(sensorDiff != 0.0)
+            M5.Display.printf("Eq");
+   }
+}
+
+void loop() {
+    unsigned long currentMillis = millis();
+    static constexpr const int colors[] = { TFT_WHITE, TFT_CYAN, TFT_RED, TFT_YELLOW, TFT_BLUE, TFT_GREEN };
+    static constexpr const char* const names[] = { "none", "wasHold", "wasClicked", "wasPressed", "wasReleased", "wasDeciedCount" };
+
+    // my_instrument.ProcessInput(Serial, "\n");
+    M5.update(); // Update button states
+    buttonState = M5.BtnA.wasHold() ? 1
+        : M5.BtnA.wasClicked() ? 2
+        : M5.BtnA.wasPressed() ? 3
+        : M5.BtnA.wasReleased() ? 4
+        : M5.BtnA.wasDecideClickCount() ? 5
+        : 0;
+    if (buttonState)
+    {
+        //M5_LOGI("BtnB:%s  count:%d", names[buttonState], M5.BtnB.getClickCount());
+        M5_LOGI("BtnA:%s  count:%d", names[buttonState], M5.BtnA.getClickCount());
+        //M5.Display.fillRect(w*2, 0, w-1, h, colors[state]);
+        M5.Display.setCursor(buttonState * 10, 80);
+        M5.Display.printf("%d", buttonState);
+        if (buttonState == 1)
+            sensorDiff = dt_oneWire.getTempC(ds18Sensors[1]) - dt_oneWire.getTempC(ds18Sensors[0]);
+    }
+    buttonState = M5.BtnB.wasHold() ? 1
+        : M5.BtnB.wasClicked() ? 2
+        : M5.BtnB.wasPressed() ? 3
+        : M5.BtnB.wasReleased() ? 4
+        : M5.BtnB.wasDecideClickCount() ? 5
+        : 0;
+    if (buttonState)
+    {
+        M5_LOGI("BtnB:%s  count:%d", names[buttonState], M5.BtnB.getClickCount());
+        M5.Display.setCursor(buttonState * 10, 100);
+        M5.Display.printf("%d", buttonState);
+    }
+
+    buttonState = M5.BtnC.wasHold() ? 1
+        : M5.BtnC.wasClicked() ? 2
+        : M5.BtnC.wasPressed() ? 3
+        : M5.BtnC.wasReleased() ? 4
+        : M5.BtnC.wasDecideClickCount() ? 5
+        : 0;
+    if (buttonState)
+    {
+        M5_LOGI("BtnC:%s  count:%d", names[buttonState], M5.BtnC.getClickCount());
+        M5.Display.setCursor(buttonState * 10, 120);
+        M5.Display.printf("%d", buttonState);
+    }
+    if (currentMillis - previousMillis > samplingInterval) {
+        previousMillis += samplingInterval;
+        // call sensors.requestTemperatures() to issue a global temperature
+        WiFiStatus = wifiMulti.run();
+        dt_oneWire.requestTemperatures();
+        sensorTemp[0] = dt_oneWire.getTempC(ds18Sensors[0]);
+        sensorTemp[1] = dt_oneWire.getTempC(ds18Sensors[1]) - sensorDiff;
+        M5_LOGI("Tred %.2f  Tblue: %.2f", sensorTemp[0], sensorTemp[1]);
+        update_display();
+
+        if (wifiMulti.run() == WL_CONNECTED) {
+            // Write point
+            if (!send_iflx_data()) {
+                M5_LOGE("InfluxDB write failed: ");
+                Serial.println(client.getLastErrorMessage());
+            }
+        }
+        else {
+            M5_LOGW("Wifi connection lost");
+            connect_wifi();
+        }
+
+    }
+}
+
+
+/*
 void loop() {
     unsigned long currentMillis = millis();
     esp32_instrument.ProcessInput(Serial, "\n");
-    StickCP2.update(); // Update button states
+    M5.update(); // Update button states
     static int count_loop;
     if (currentMillis - previousMillis > samplingInterval) {
         previousMillis += samplingInterval;
@@ -378,4 +520,5 @@ void loop() {
     // }
 
 }
+*/
 //  vim: syntax=cpp ts=4 sw=4 sts=4 sr et
