@@ -31,12 +31,13 @@ ONE_BIT_DISPLAY obd;
 #define SDA_PIN 5
 #define SCL_PIN 6
 #define LED_PIN 8
+#define BOOTSEL_PIN 9
 
 #define DEVICE "ESP32"
 
 #define TZ_INFO "UTC"
 
-#define WIFI_RETRIES 20
+#define WIFI_RETRIES 15
 WiFiMulti wifiMulti;
 uint8_t WiFiStatus = WL_DISCONNECTED;
 bool ledState = false;
@@ -75,13 +76,13 @@ int buttonState;
 #define NRSENSORS  3
 uint8_t redThermometers[NRSENSORS][8] = {
     {0x28, 0xA3, 0xA0, 0xB9, 0xB0, 0x23, 0x07, 0x81},
-    {0x28, 0x8B, 0xD0, 0x7F, 0xB2, 0x23, 0x06, 0xDA},
+    {0x28, 0xDB, 0x0B,0xEE,  0xB2, 0x23,0x06,0xB4},
     {0x28, 0x1B, 0x3D, 0x57, 0x04, 0xE1, 0x3C, 0xB9}
 };
 uint8_t blueThermometers[NRSENSORS][8] = {
     {0x28, 0xAA, 0xAF, 0x77, 0xB0, 0x23, 0x07, 0x54},
-    {0x28, 0x47, 0xED, 0xA8, 0xB2, 0x23, 0x06, 0xD7},
-    {0x28, 0xDB, 0x0B,0xEE,  0xB2, 0x23,0x06,0xB4}
+    {0x28, 0x8B, 0xD0, 0x7F, 0xB2, 0x23, 0x06, 0xDA},
+    {0x28, 0x47, 0xED, 0xA8, 0xB2, 0x23, 0x06, 0xD7}
 };
 
 DeviceAddress redThermometer; //  =  {0x28, 0x1B, 0x3D, 0x57, 0x04, 0xE1, 0x3C, 0xB9};
@@ -109,7 +110,7 @@ bool iflxConnected = false;
 uint8_t dsCount = 0;
 
 static const char* TAG = "EspC3";
-const unsigned int samplingInterval = 2000;
+const unsigned int samplingInterval = 5000;
 unsigned long previousMillis = 0;
 
 
@@ -170,21 +171,19 @@ bool init_onewire() {
     }
 
     // report parasite power requirements
-    log_i("Parasite power is: ");
     if (dt_oneWire.isParasitePowerMode())
-        ESP_LOGI(TAG, "ON");
+        ESP_LOGI(TAG, "Parasite power is: ON");
         //log_i("ON\n");
     else
-        log_i("OFF\n");
+        ESP_LOGI(TAG, "Parasite power is: OFF");
     return ok;
 }
 
 unsigned setup_dallas(){
     unsigned int found = 0;
-    //unsigned int nsensors =  sizeof(array) / sizeof(array[0]);
     for (int s = 0; s < NRSENSORS; s++) {
         if (dt_oneWire.isConnected(redThermometers[s])){
-            ESP_LOGI(TAG, "Found Red Device index %d", s);
+            ESP_LOGI(TAG, "Found Red Sensor index %d", s);
             printDtAddress(redThermometers[s]);
             cpyDtAddress(redThermometer, redThermometers[s]);
             dt_oneWire.setResolution(redThermometer, TEMPERATURE_PRECISION);
@@ -194,7 +193,7 @@ unsigned setup_dallas(){
     }
     for (int s = 0; s < NRSENSORS; s++) {
         if (dt_oneWire.isConnected(blueThermometers[s])){
-            ESP_LOGI(TAG, "Found Blue Device index %d", s);
+            ESP_LOGI(TAG, "Found Blue Sensor index %d", s);
             printDtAddress(blueThermometers[s]);
             cpyDtAddress(blueThermometer, blueThermometers[s]);
             dt_oneWire.setResolution(blueThermometer, TEMPERATURE_PRECISION);
@@ -202,29 +201,6 @@ unsigned setup_dallas(){
             break;
         }
     }
-    /*
-    if (!dt_oneWire.isConnected(redThermometer))
-    {
-        ESP_LOGI(TAG, "Unable to find Device 0 (red)");
-    }
-    else {
-        ESP_LOGI(TAG, "Red Temp sensor, Resolution: %d",
-                dt_oneWire.getResolution(ds18Sensors[0]));
-        found++;
-    }
-    if (!dt_oneWire.isConnected(blueThermometer))
-    {
-            ESP_LOGI("TAG", "Unable to find Device 1 (blue)");
-    }
-    else {
-        cpyDtAddress(ds18Sensors[1], blueThermometer);
-        dt_oneWire.setResolution(ds18Sensors[1], TEMPERATURE_PRECISION);
-        ESP_LOGI(TAG, "Blue Temp sensor, Resolution: %d", 
-                dt_oneWire.getResolution(ds18Sensors[1]));
-        //Serial.println(dt_oneWire.getResolution(ds18Sensors[1]), DEC);
-        found++;
-    }
-    */
 
     return found;
 }
@@ -315,7 +291,8 @@ void setup() {
         pinMode(LED_PIN, OUTPUT);
         pinMode(20, INPUT); // RX IN
 
-        digitalWrite(LED_PIN, ledState);
+        digitalWrite(LED_PIN, true); // LED off
+        pinMode(BOOTSEL_PIN, INPUT_PULLUP);
 
         bool ok = false;
         Serial.begin(115200);
@@ -337,7 +314,6 @@ void setup() {
         log_i("hello world!");
         log_e("hello worldE!");
         // attempt to connect to Wifi network:
-        delay(1000);
 
         ESP_LOGI(TAG, "Attempting to connect to SSID: ");
         for(int i = 0; i < NUM_SSID; i++) {
@@ -362,7 +338,7 @@ void setup() {
             
         }
         */
-        log_i("OW init. Locating devices...");
+        //log_i("OW init. Locating devices...");
         ESP_LOGI(TAG, "CHIP MAC: %012llx", ESP.getEfuseMac());
         sprintf(buffer,"Esp32C3-%012llx", ESP.getEfuseMac());
         init_onewire();
@@ -370,23 +346,30 @@ void setup() {
         WiFiStatus = connect_wifi(WIFI_RETRIES);
         //Serial.println
         // Add constant tags - only once
+        delay(2000);
         if (WiFiStatus == WL_CONNECTED) {
-            iflxSensor.addTag("experiment", "calorimetryEsp32C3");
-            //iflxSensor.addTag("experiment", buffer); //"calorimetryEsp32C3");
+            //iflxSensor.addTag("experiment", "calorimetryEsp32C3");
+            iflxSensor.addTag("experiment", buffer); //"calorimetryEsp32C3");
             validate_influx();
+            previousMillis = millis() + 10 * samplingInterval;
         }
-
         ESP_LOGI(TAG, "Dallas Temperature IC Control Library Demo");
-
 }
 
 void loop() {
         unsigned long currentMillis = millis();
+        //ledState = not ledState;
+        ledState = digitalRead(BOOTSEL_PIN);
+        if(not ledState) {
+            sensorDiff = dt_oneWire.getTempC(blueThermometer) - dt_oneWire.getTempC(redThermometer);
+            digitalWrite(LED_PIN, false); // Turn ON
+        }
+
         if (currentMillis - previousMillis > samplingInterval) {
-            previousMillis += samplingInterval;
+            previousMillis = currentMillis;
             // call sensors.requestTemperatures() to issue a global temperature
             dt_oneWire.requestTemperatures();
-            sensorTemp[0] = dt_oneWire.getTempC(redThermometer);  //ds18Sensors[0]);
+            sensorTemp[0] = dt_oneWire.getTempC(redThermometer);
             sensorTemp[1] = dt_oneWire.getTempC(blueThermometer) - sensorDiff;
             ESP_LOGI(TAG, "Tred: %.2fC, Tblue: %.2f",
                     sensorTemp[0],  sensorTemp[1]);     // Information messages which describe normal flow of events
@@ -408,12 +391,7 @@ void loop() {
                     }
                 }
             }
-
-
 //            else
 //                iflxConnected  = false;
-            digitalWrite(LED_PIN, ledState);
-            ledState = not ledState;
         }
-
 }
