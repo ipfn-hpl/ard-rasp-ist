@@ -274,11 +274,12 @@ void validate_influx() {
     // Check server connection
     if (iflxClient.validateConnection()) {
         ESP_LOGI(TAG, "Connected to InfluxDB: ");
-        ESP_LOGI(TAG, "%s", iflxClient.getServerUrl());
-        iflxConnected  = true;
+        //ESP_LOGI(TAG, "%s", iflxClient.getServerUrl());
+        //iflxConnected  = true;
     } else {
         //Serial.print("InfluxDB connection failed: ");
-        ESP_LOGW(TAG, "InfluxDB Not connected %s", iflxClient.getLastErrorMessage());
+        ESP_LOGW(TAG, "InfluxDB Not connected"); 
+        // %s", iflxClient.getLastErrorMessage());
     }
 }
 void lightSleep(uint64_t time_in_ms)
@@ -370,9 +371,9 @@ void setup() {
         //Serial.println
         // Add constant tags - only once
         if (WiFiStatus == WL_CONNECTED) {
-            //iflxSensor.addTag("experiment", "calorimetryEsp32C3");
-            iflxSensor.addTag("experiment", buffer); //"calorimetryEsp32C3");
-            //validate_influx();
+            iflxSensor.addTag("experiment", "calorimetryEsp32C3");
+            //iflxSensor.addTag("experiment", buffer); //"calorimetryEsp32C3");
+            validate_influx();
         }
 
         ESP_LOGI(TAG, "Dallas Temperature IC Control Library Demo");
