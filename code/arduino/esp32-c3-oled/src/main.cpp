@@ -72,17 +72,22 @@ int buttonState;
 
 
  * */
-
-DeviceAddress redThermometers[][8] = {
-    {0x28, 0xAA, 0xAF, 0x77, 0xB0, 0x23, 0x07, 0x54},
-
+#define NRSENSORS  3
+uint8_t redThermometers[NRSENSORS][8] = {
+    {0x28, 0xA3, 0xA0, 0xB9, 0xB0, 0x23, 0x07, 0x81},
     {0x28, 0x8B, 0xD0, 0x7F, 0xB2, 0x23, 0x06, 0xDA},
     {0x28, 0x1B, 0x3D, 0x57, 0x04, 0xE1, 0x3C, 0xB9}
 };
-DeviceAddress redThermometer  =  {0x28, 0x1B, 0x3D, 0x57, 0x04, 0xE1, 0x3C, 0xB9};
+uint8_t blueThermometers[NRSENSORS][8] = {
+    {0x28, 0xAA, 0xAF, 0x77, 0xB0, 0x23, 0x07, 0x54},
+    {0x28, 0x47, 0xED, 0xA8, 0xB2, 0x23, 0x06, 0xD7},
+    {0x28, 0xDB, 0x0B,0xEE,  0xB2, 0x23,0x06,0xB4}
+};
+
+DeviceAddress redThermometer; //  =  {0x28, 0x1B, 0x3D, 0x57, 0x04, 0xE1, 0x3C, 0xB9};
 
 //    0x28, 0x46, 0x91, 0x46, 0xD4, 0xB7, 0x1F, 0x7D};
-DeviceAddress blueThermometer  = {0x28, 0x47, 0xED, 0xA8, 0xB2, 0x23, 0x06, 0xD7};
+DeviceAddress blueThermometer; //  = {0x28, 0x47, 0xED, 0xA8, 0xB2, 0x23, 0x06, 0xD7};
 
 #define WRITE_PRECISION WritePrecision::US
 #define MAX_BATCH_SIZE 500
@@ -158,8 +163,8 @@ bool init_onewire() {
         for (uint8_t i = 0; i < 2; i++) {
             if (!dt_oneWire.getAddress(ds18Sensors[i], i)) 
                 ESP_LOGW(TAG, "Unable to find address for Device %d", i);
-            else 
-                printDtAddress(ds18Sensors[i]);
+            //else 
+            //    printDtAddress(ds18Sensors[i]);
 
         }
     }
@@ -176,13 +181,33 @@ bool init_onewire() {
 
 unsigned setup_dallas(){
     unsigned int found = 0;
+    //unsigned int nsensors =  sizeof(array) / sizeof(array[0]);
+    for (int s = 0; s < NRSENSORS; s++) {
+        if (dt_oneWire.isConnected(redThermometers[s])){
+            ESP_LOGI(TAG, "Found Red Device index %d", s);
+            printDtAddress(redThermometers[s]);
+            cpyDtAddress(redThermometer, redThermometers[s]);
+            dt_oneWire.setResolution(redThermometer, TEMPERATURE_PRECISION);
+            found++;
+            break;
+        }
+    }
+    for (int s = 0; s < NRSENSORS; s++) {
+        if (dt_oneWire.isConnected(blueThermometers[s])){
+            ESP_LOGI(TAG, "Found Blue Device index %d", s);
+            printDtAddress(blueThermometers[s]);
+            cpyDtAddress(blueThermometer, blueThermometers[s]);
+            dt_oneWire.setResolution(blueThermometer, TEMPERATURE_PRECISION);
+            found++;
+            break;
+        }
+    }
+    /*
     if (!dt_oneWire.isConnected(redThermometer))
     {
         ESP_LOGI(TAG, "Unable to find Device 0 (red)");
     }
     else {
-        cpyDtAddress(ds18Sensors[0], redThermometer);
-        dt_oneWire.setResolution(ds18Sensors[0], TEMPERATURE_PRECISION);
         ESP_LOGI(TAG, "Red Temp sensor, Resolution: %d",
                 dt_oneWire.getResolution(ds18Sensors[0]));
         found++;
@@ -199,6 +224,8 @@ unsigned setup_dallas(){
         //Serial.println(dt_oneWire.getResolution(ds18Sensors[1]), DEC);
         found++;
     }
+    */
+
     return found;
 }
 
@@ -211,16 +238,18 @@ bool send_iflx_data(InfluxDBClient client, Point iflx) {
     return client.writePoint(iflx);
 }
 
-bool connect_wifi(int retries) {
-    bool ret = false;
+int connect_wifi(int retries) {
+    int status = WL_IDLE_STATUS; // the Wifi radio's status
     for(int i = 0; i < retries; i++) {
-        if(wifiMulti.run() == WL_CONNECTED) {
+        status = wifiMulti.run();
+        if(status == WL_CONNECTED) {
             //Serial.println(" WiFi connected. ");
             log_i("IP address: ");
             IPAddress ip = WiFi.localIP();
             log_i("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
             //M5.Display.print("WiFi connected.");
-            ret = true;
+            configTzTime("UTC", "192.168.88.1", "pool.ntp.org", "time.nis.gov");
+            //status = WL_CONNECTED;
             break;
         }
         else {
@@ -228,17 +257,17 @@ bool connect_wifi(int retries) {
             delay(500);
         }
     }
-    if (ret) {
+    if (status != WL_CONNECTED) {
         // Accurate time is necessary for certificate validation and writing in batches
         // We use the NTP servers in your area as provided by: https://www.pool.ntp.org/zone/
         // Syncing progress and the time will be printed to Serial.
         //timeSync(TZ_INFO, "ntp1.tecnico.ulisboa.pt", "pool.ntp.org");
-        configTzTime("UTC", "ntp1.tecnico.ulisboa.pt", "pool.ntp.org", "time.nis.gov");
-    }
-    else
+        //configTzTime("UTC", "192.168.88.1", "pool.ntp.org", "time.nis.gov");
+        //timeSync("UTC", "192.168.88.1", "pool.ntp.org", "time.nis.gov");
         ESP_LOGW(TAG, " Fail to connect WiFi, giving up.");
 
-    return ret;
+    }
+    return status;
 }
 
 void validate_influx() {
@@ -269,6 +298,8 @@ void printDtAddress(DeviceAddress deviceAddress)
 }
 unsigned int count = 0;
 
+char buffer[32];
+
 void setup() {   
 
         Wire.begin(SDA_PIN, SCL_PIN);
@@ -287,7 +318,7 @@ void setup() {
 
         bool ok = false;
         Serial.begin(115200);
-        while (!Serial);
+        //while (!Serial);
             // wait for serial port to connect. Needed for native USB port only
         esp_log_level_set("*", ESP_LOG_INFO);        // set all components to ERROR level
         #if defined ( ESP_PLATFORM )
@@ -311,6 +342,7 @@ void setup() {
         for(int i = 0; i < NUM_SSID; i++) {
             wifiMulti.addAP(ssids[i], pass[i]);
         }
+        /*
         if (!SENSORS.begin(0x100)) {
             ESP_LOGE(TAG, "Failed to initialize EEPROM");
             //Serial.println("Restarting...");
@@ -321,22 +353,25 @@ void setup() {
             ESP_LOGI(TAG, "Initialize EEPROM OK");
             //writeDtAddress(redThermometer);
             readDtAddress(redThermometer);
-            /* CORRUPT HEAP: Bad head at 0x3fcaa9d0. Expected 0xabba1234 got 0x3fc995d4
+            //CORRUPT HEAP: Bad head at 0x3fcaa9d0. Expected 0xabba1234 got 0x3fc995d4
 
-assert failed: multi_heap_free multi_heap_poisoning.c:259 (head != NULL)
+//assert failed: multi_heap_free multi_heap_poisoning.c:259 (head != NULL)
 
-            readDtAddress(SENSORS, redThermometer);
-            */
+            //readDtAddress(SENSORS, redThermometer);
+            
         }
+        */
         log_i("OW init. Locating devices...");
         ESP_LOGI(TAG, "CHIP MAC: %012llx", ESP.getEfuseMac());
+        sprintf(buffer,"Esp32C3-%012llx", ESP.getEfuseMac());
         init_onewire();
         setup_dallas();
-        ok = connect_wifi(WIFI_RETRIES);
+        WiFiStatus = connect_wifi(WIFI_RETRIES);
         //Serial.println
         // Add constant tags - only once
-        if (ok) {
-            iflxSensor.addTag("experiment", "calorimetryEsp32C3");
+        if (WiFiStatus == WL_CONNECTED) {
+            //iflxSensor.addTag("experiment", "calorimetryEsp32C3");
+            iflxSensor.addTag("experiment", buffer); //"calorimetryEsp32C3");
             //validate_influx();
         }
 
@@ -350,19 +385,21 @@ void loop() {
             previousMillis += samplingInterval;
             // call sensors.requestTemperatures() to issue a global temperature
             dt_oneWire.requestTemperatures();
-            sensorTemp[0] = dt_oneWire.getTempC(ds18Sensors[0]);
-            sensorTemp[1] = dt_oneWire.getTempC(ds18Sensors[1]) - sensorDiff;
+            sensorTemp[0] = dt_oneWire.getTempC(redThermometer);  //ds18Sensors[0]);
+            sensorTemp[1] = dt_oneWire.getTempC(blueThermometer) - sensorDiff;
             ESP_LOGI(TAG, "Tred: %.2fC, Tblue: %.2f",
                     sensorTemp[0],  sensorTemp[1]);     // Information messages which describe normal flow of events
-            WiFiStatus = wifiMulti.run();
+            //WiFiStatus = wifiMulti.run();
             obd.setCursor(0,0);
             obd.printf("TRed: %.2f \n\n", sensorTemp[0]);
             obd.printf("TBlue: %.2f \n\n", sensorTemp[1]);
             obd.printf("WiFi: %d", WiFiStatus);
             obd.display();
-                /*
+            time_t tnow = time(nullptr);
+            ESP_LOGI(TAG, "Synchronized time: %s", ctime(&tnow));
+
             if (WiFiStatus == WL_CONNECTED) {
-                /validate_influx();
+                //validate_influx();
                 if(iflxConnected) {
                     if (!send_iflx_data(iflxClient, iflxSensor)) {
                         ESP_LOGE(TAG, "InfluxDB write failed: ");
@@ -370,7 +407,6 @@ void loop() {
                     }
                 }
             }
-                */
 
 
 //            else
