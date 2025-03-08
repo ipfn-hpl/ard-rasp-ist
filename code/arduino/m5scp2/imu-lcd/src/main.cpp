@@ -2,15 +2,32 @@
  *  https://github.com/m5stack/M5Unified/tree/master/examples/Basic/Imu
  *  */
 #include <Arduino.h>
-// If you use Unit OLED, write this.
-// #include <M5UnitOLED.h>
-
 // If you use Unit LCD, write this.
 //#include <M5UnitLCD.h>
-
-
 // Include this to enable the M5 global instance.
 #include <M5Unified.h>
+
+#include <WiFiMulti.h>
+#include <InfluxDbClient.h>
+#include <InfluxDbCloud.h>
+
+#include "arduino_secrets.h"
+
+#define DEVICE "ESP32"
+
+#define TZ_INFO "UTC0"
+
+#define WIFI_RETRIES 15
+// Declare InfluxDB client instance with preconfigured InfluxCloud certificate
+InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN, InfluxDbCloud2CACert);
+
+#define NTP_SERVER1  "ntp1.tecnico.ulisboa.pt"
+#define NTP_SERVER2  "pool.ntp.org"
+
+#define WRITE_PRECISION WritePrecision::US  // MS
+#define MAX_BATCH_SIZE 10
+// The recommended size is at least 2 x batch size.
+#define WRITE_BUFFER_SIZE 3 * MAX_BATCH_SIZE
 
 // Strength of the calibration operation;
 // 0: disables calibration.
@@ -65,6 +82,60 @@ static rect_t rect_text_area;
 static uint8_t calib_countdown = 0;
 
 static int prev_xpos[18];
+// Declare Data point
+Point iflxSensor("wifi_status");
+
+WiFiMulti wifiMulti;
+uint8_t WiFiStatus = WL_DISCONNECTED;
+
+const unsigned long imu_semp_period = 10000; // in us
+unsigned int point2Send = 0; //100; // in us
+                                             //
+int connect_wifi(int retries) {
+    int status = WL_IDLE_STATUS; // the Wifi radio's status
+    for(int i = 0; i < retries; i++) {
+        status = wifiMulti.run();
+        if(status == WL_CONNECTED) {
+            //Serial.println(" WiFi connected. ");
+            //log_i("IP address: ");
+            IPAddress ip = WiFi.localIP();
+            M5_LOGI("IPAddress %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+            //M5.Display.print("WiFi connected.");
+            break;
+        }
+        else {
+            M5_LOGI("..");
+            delay(500);
+        }
+    }
+    if (status == WL_CONNECTED) {
+        // Accurate time is necessary for certificate validation and writing in batches
+        // We use the NTP servers in your area as provided by: https://www.pool.ntp.org/zone/
+        // Syncing progress and the time will be printed to Serial.
+        timeSync(TZ_INFO,  NTP_SERVER1, NTP_SERVER2);
+        //configTzTime(TZ_INFO, "ntp1.tecnico.ulisboa.pt", "pool.ntp.org", "time.nis.gov");
+        if (client.validateConnection()) {
+            M5_LOGI("Connected to InfluxDB.");
+            //: %s",
+            // client.getServerUrl());
+            // Set write precision to milliseconds. Leave other parameters default.
+            // Enable messages batching and retry buffer
+            /*
+            client.setWriteOptions(
+                    WriteOptions().writePrecision(WRITE_PRECISION).batchSize(MAX_BATCH_SIZE).bufferSize(WRITE_BUFFER_SIZE));
+                    */
+        } else {
+            M5_LOGE("InfluxDB connection failed: ");
+            //Serial.println(client.getLastErrorMessage());
+        }
+    }
+    else {
+        M5_LOGE(" Fail to connect WiFi, giving up.");
+        //timeSync("UTC", "192.168.88.1", "pool.ntp.org", "time.nis.gov");
+    }
+    return status;
+}
+
 
 void drawBar(int32_t ox, int32_t oy, int32_t nx, int32_t px, int32_t h, uint32_t color)
 {
@@ -155,7 +226,6 @@ void updateCalibration(uint32_t c, bool clear = false)
     else
     { // Stop calibration. (Continue calibration only for the geomagnetic sensor)
       M5.Imu.setCalibration(0, 0, calib_value);
-
       // If you want to stop all calibration, write this.
       // M5.Imu.setCalibration(0, 0, 0);
 
@@ -239,12 +309,33 @@ void setup(void)
   rect_graph_area = { 0, 0, w, graph_area_h };
   rect_text_area = {0, graph_area_h, w, text_area_h };
 
-
   // Read calibration values from NVS.
   if (!M5.Imu.loadOffsetFromNVS())
   {
     startCalibration();
   }
+  // attempt to connect to Wifi network:
+
+  M5_LOGI("Attempting to connect to SSID: ");
+  for(int i = 0; i < NUM_SSID; i++) {
+      wifiMulti.addAP(ssids[i], pass[i]);
+  }
+   WiFiStatus = connect_wifi(WIFI_RETRIES);
+   //Serial.println
+   // Add constant tags - only once
+// Add tags to the data point
+    iflxSensor.addTag("device", DEVICE);
+    iflxSensor.addTag("SSID", WiFi.SSID());
+   delay(2000);
+   
+   /*
+   if (WiFiStatus == WL_CONNECTED) {
+       //iflxSensor.addTag("experiment", "calorimetryEsp32C3");
+       //iflx_sensor.addTag("experiment", buffer); //"calorimetryEsp32C3");
+       //validate_influx();
+     //  previousMillis = millis() + 10 * samplingInterval;
+   }
+   */
 }
 
 void loop(void)
@@ -282,7 +373,7 @@ void loop(void)
     M5_LOGV("ax:%f  ay:%f  az:%f", data.accel.x, data.accel.y, data.accel.z);
     M5_LOGV("gx:%f  gy:%f  gz:%f", data.gyro.x , data.gyro.y , data.gyro.z );
     M5_LOGV("mx:%f  my:%f  mz:%f", data.mag.x  , data.mag.y  , data.mag.z  );
-//*/
+*/
     ++frame_count;
   }
   else
@@ -290,6 +381,10 @@ void loop(void)
     M5.update();
 
     // Calibration is initiated when a button or screen is clicked.
+    if (M5.BtnA.wasClicked() ){
+        M5_LOGW("M5.BtnA.wasClicked");
+        point2Send = 100;
+    }
     if (M5.BtnA.wasClicked() || M5.BtnPWR.wasClicked() || M5.Touch.getDetail().wasClicked())
     {
       startCalibration();
@@ -307,7 +402,33 @@ void loop(void)
     {
       updateCalibration(calib_countdown - 1);
     }
-
+    iflxSensor.clearFields();
+  
+    // Store measured value into point
+    // Report RSSI of currently connected network
+    //iflxSensor.setTime(time(nullptr));
+    iflxSensor.addField("rssi", WiFi.RSSI());
+     // Check WiFi connection and reconnect if needed
+    if (wifiMulti.run() != WL_CONNECTED) {
+        M5_LOGE("Wifi connection lost");
+    }
+    else { 
+        // Write point
+        if (!client.writePoint(iflxSensor)) {
+            M5_LOGE("InfluxDB write failed: ");
+            //client.getLastErrorMessage());
+        }
+    }
+    /*
+    M5_LOGI("Flushing data into InfluxDB");
+    if (!client.flushBuffer()) {
+        M5_LOGW("InfluxDB flush failed: ");
+        //M5_LOGWclient.getLastErrorMessage());
+        M5_LOGE("Full buffer: %d",
+                client.isBufferFull());
+        // ? "Yes" : "No");
+    }
+    */
     if ((sec & 7) == 0)
     { // prevent WDT.
       vTaskDelay(1);
