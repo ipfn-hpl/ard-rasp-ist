@@ -11,6 +11,19 @@
 #include <InfluxDbClient.h>
 #include <InfluxDbCloud.h>
 
+// Different versions of the framework have different SNTP header file names and availability.
+ #if __has_include (<esp_sntp.h>)
+  #include <esp_sntp.h>
+  #define SNTP_ENABLED 1
+ #elif __has_include (<sntp.h>)
+  #include <sntp.h>
+  #define SNTP_ENABLED 1
+ #endif
+
+#ifndef SNTP_ENABLED
+#define SNTP_ENABLED 0
+#endif
+
 #include "arduino_secrets.h"
 
 #define DEVICE "ESP32"
@@ -21,11 +34,13 @@
 // Declare InfluxDB client instance with preconfigured InfluxCloud certificate
 InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN, InfluxDbCloud2CACert);
 
-#define NTP_SERVER1  "ntp1.tecnico.ulisboa.pt"
-#define NTP_SERVER2  "pool.ntp.org"
+#define NTP_SERVER1  "pool.ntp.org"
+#define NTP_SERVER2  "ntp1.tecnico.ulisboa.pt"
+#define NTP_SERVER3   "1.pool.ntp.org"
+ #define NTP_TIMEZONE  "UTC"
 
-#define WRITE_PRECISION WritePrecision::US  // MS
-#define MAX_BATCH_SIZE 10
+#define WRITE_PRECISION WritePrecision::MS  // MS
+#define MAX_BATCH_SIZE 50
 // The recommended size is at least 2 x batch size.
 #define WRITE_BUFFER_SIZE 3 * MAX_BATCH_SIZE
 
@@ -93,6 +108,9 @@ unsigned int point2Send = 0; //100; // in us
                                              //
 int connect_wifi(int retries) {
     int status = WL_IDLE_STATUS; // the Wifi radio's status
+    // setup RTC ( NTP auto setting )
+    configTzTime(NTP_TIMEZONE, NTP_SERVER1, NTP_SERVER2, NTP_SERVER3);
+
     for(int i = 0; i < retries; i++) {
         status = wifiMulti.run();
         if(status == WL_CONNECTED) {
@@ -112,21 +130,39 @@ int connect_wifi(int retries) {
         // Accurate time is necessary for certificate validation and writing in batches
         // We use the NTP servers in your area as provided by: https://www.pool.ntp.org/zone/
         // Syncing progress and the time will be printed to Serial.
-        timeSync(TZ_INFO,  NTP_SERVER1, NTP_SERVER2);
+        //timeSync(TZ_INFO,  NTP_SERVER1, NTP_SERVER2);
         //configTzTime(TZ_INFO, "ntp1.tecnico.ulisboa.pt", "pool.ntp.org", "time.nis.gov");
+#if SNTP_ENABLED
+        M5.Log.println("SNTP ENABLED.\n");
+        while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED)
+        {
+            M5.Log.print(".");
+            M5.delay(1000);
+        }
+#else
+        M5.delay(1600);
+        struct tm timeInfo;
+        while (!getLocalTime(&timeInfo, 1000))
+        {
+            M5.Log.print('.');
+        };
+#endif
+        M5.Log.println("\r\nNTP Connected.");
+        time_t t = time(nullptr)+1; // Advance one second.
+        while (t > time(nullptr));  /// Synchronization in seconds
+        M5.Rtc.setDateTime( gmtime( &t ) );
+
         if (client.validateConnection()) {
-            M5_LOGI("Connected to InfluxDB.");
-            //: %s",
-            // client.getServerUrl());
+            M5_LOGI("Connected to InfluxDB: %s", 
+                    client.getServerUrl().c_str());
             // Set write precision to milliseconds. Leave other parameters default.
             // Enable messages batching and retry buffer
-            /*
             client.setWriteOptions(
                     WriteOptions().writePrecision(WRITE_PRECISION).batchSize(MAX_BATCH_SIZE).bufferSize(WRITE_BUFFER_SIZE));
-                    */
         } else {
-            M5_LOGE("InfluxDB connection failed: ");
-            //Serial.println(client.getLastErrorMessage());
+            M5_LOGE("InfluxDB connection failed: %s",
+            //Serial.println(
+                    client.getLastErrorMessage().c_str());
         }
     }
     else {
@@ -260,18 +296,27 @@ void setup(void)
   M5.begin(cfg);
 
   /// You can set Log levels for each output destination.
-/// ESP_LOG_ERROR / ESP_LOG_WARN / ESP_LOG_INFO / ESP_LOG_DEBUG / ESP_LOG_VERBOSE
+  /// ESP_LOG_ERROR / ESP_LOG_WARN / ESP_LOG_INFO / ESP_LOG_DEBUG / ESP_LOG_VERBOSE
   M5.Log.setLogLevel(m5::log_target_serial, ESP_LOG_VERBOSE);
   //M5.Log.setLogLevel(m5::log_target_display, ESP_LOG_DEBUG);
   //M5.Log.setLogLevel(m5::log_target_callback, ESP_LOG_INFO);
   /// You can color the log or not.
-    M5.Log.setEnableColor(m5::log_target_serial, true);
+  M5.Log.setEnableColor(m5::log_target_serial, true);
 
-    M5_LOGI("M5_LOGI info log");      // INFO level output with source INFO
+  M5_LOGI("M5_LOGI info log");      // INFO level output with source INFO
 
   const char* name;
   auto imu_type = M5.Imu.getType();
 //[   262][I][main.cpp:214] setup(): imu:mpu6886
+
+ if (!M5.Rtc.isEnabled())
+  {
+    M5.Log.println("RTC not found.");
+    for (;;) { M5.delay(500); }
+  }
+
+  M5.Log.println("RTC found.");
+
 
   switch (imu_type)
   {
@@ -323,11 +368,11 @@ void setup(void)
    WiFiStatus = connect_wifi(WIFI_RETRIES);
    //Serial.println
    // Add constant tags - only once
+   delay(2000);
+   
 // Add tags to the data point
     iflxSensor.addTag("device", DEVICE);
     iflxSensor.addTag("SSID", WiFi.SSID());
-   delay(2000);
-   
    /*
    if (WiFiStatus == WL_CONNECTED) {
        //iflxSensor.addTag("experiment", "calorimetryEsp32C3");
@@ -342,6 +387,7 @@ void loop(void)
 {
   static uint32_t frame_count = 0;
   static uint32_t prev_sec = 0;
+  static constexpr const char* const wd[7] = {"Sun","Mon","Tue","Wed","Thr","Fri","Sat"};
 
   // To update the IMU value, use M5.Imu.update.
   // If a new value is obtained, the return value is non-zero.
@@ -351,6 +397,27 @@ void loop(void)
     // Obtain data on the current value of the IMU.
     auto data = M5.Imu.getImuData();
     drawGraph(rect_graph_area, data);
+     // Report networks (low priority data) in case we successfully wrote the previous batch
+    if (!client.isBufferFull()) {
+    if (point2Send > 0) {
+        // Set identical time for the whole network scan
+        time_t tnow = time(nullptr);
+        Point sensorImu("imu_data");
+        sensorImu.addTag("device", DEVICE);
+        sensorImu.addField("gyro.x", data.gyro.x);
+        sensorImu.addField("gyro.y", data.gyro.y);
+        sensorImu.addField("gyro.z", data.gyro.z);
+        //sensorImu.setTime(tnow);  //set the time
+          if (!client.writePoint(sensorImu)) {
+              M5_LOGE("InfluxDB write failed: %s",
+                      client.getLastErrorMessage().c_str());
+          }
+          //else
+              point2Send--;
+    }
+    }
+     else
+         M5_LOGW("IMU reporting skipped due to communication issues");
 /*
     // The data obtained by getImuData can be used as follows.
     data.accel.x;      // accel x-axis value.
@@ -383,9 +450,9 @@ void loop(void)
     // Calibration is initiated when a button or screen is clicked.
     if (M5.BtnA.wasClicked() ){
         M5_LOGW("M5.BtnA.wasClicked");
-        point2Send = 100;
+        point2Send = 20;
     }
-    if (M5.BtnA.wasClicked() || M5.BtnPWR.wasClicked() || M5.Touch.getDetail().wasClicked())
+    if (M5.BtnPWR.wasClicked() || M5.Touch.getDetail().wasClicked())
     {
       startCalibration();
     }
@@ -394,44 +461,56 @@ void loop(void)
   int32_t sec = millis() / 1000;
   if (prev_sec != sec)
   {
-    prev_sec = sec;
-    M5_LOGI("sec:%d  frame:%d", sec, frame_count);
-    frame_count = 0;
+      // ESP32 internal timer
+      auto t = time(nullptr);
+      {
+          auto tm = gmtime(&t);    // for UTC.
+          M5.Display.setCursor(0,20);
+          M5.Log.printf("ESP32 UTC  :%04d/%02d/%02d (%s)  %02d:%02d:%02d\r\n",
+                  tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
+                  wd[tm->tm_wday],
+                  tm->tm_hour, tm->tm_min, tm->tm_sec);
+      }
+      prev_sec = sec;
+      M5_LOGI("sec:%d  frame:%d", sec, frame_count);
+      frame_count = 0;
 
-    if (calib_countdown)
-    {
-      updateCalibration(calib_countdown - 1);
-    }
-    iflxSensor.clearFields();
+      if (calib_countdown)
+      {
+          updateCalibration(calib_countdown - 1);
+      }
+    //iflxSensor.clearFields();
   
     // Store measured value into point
     // Report RSSI of currently connected network
-    //iflxSensor.setTime(time(nullptr));
-    iflxSensor.addField("rssi", WiFi.RSSI());
-     // Check WiFi connection and reconnect if needed
-    if (wifiMulti.run() != WL_CONNECTED) {
-        M5_LOGE("Wifi connection lost");
-    }
-    else { 
-        // Write point
-        if (!client.writePoint(iflxSensor)) {
-            M5_LOGE("InfluxDB write failed: ");
-            //client.getLastErrorMessage());
-        }
-    }
-    /*
-    M5_LOGI("Flushing data into InfluxDB");
-    if (!client.flushBuffer()) {
-        M5_LOGW("InfluxDB flush failed: ");
-        //M5_LOGWclient.getLastErrorMessage());
-        M5_LOGE("Full buffer: %d",
-                client.isBufferFull());
-        // ? "Yes" : "No");
-    }
-    */
-    if ((sec & 7) == 0)
-    { // prevent WDT.
-      vTaskDelay(1);
-    }
+    // [ 13140][W][main.cpp:424] loop(): InfluxDB flush failed: {"code":"unprocessable entity","message":"failure writing points to database: partial write: points beyond retention policy dropped=1"}
+      //iflxSensor.setTime(time(nullptr));
+      iflxSensor.addField("rssi", WiFi.RSSI());
+      // Check WiFi connection and reconnect if needed
+      if (wifiMulti.run() != WL_CONNECTED) {
+          M5_LOGE("Wifi connection lost");
+      }
+      else { 
+          // Write point
+          if (!client.writePoint(iflxSensor)) {
+              M5_LOGE("InfluxDB write failed: %s",
+                      client.getLastErrorMessage().c_str());
+          }
+          // Clear fields for next usage. Tags remain the same.
+          iflxSensor.clearFields();
+          M5_LOGI("Flushing data into InfluxDB");
+          if (!client.flushBuffer()) {
+              M5_LOGW("InfluxDB flush failed: %s",
+                      client.getLastErrorMessage().c_str());
+              M5_LOGE("Full buffer: %d",
+                      client.isBufferFull());
+              // ? "Yes" : "No");
+          }
+
+      }
+      if ((sec & 7) == 0)
+      { // prevent WDT.
+          vTaskDelay(1);
+      }
   }
 }
