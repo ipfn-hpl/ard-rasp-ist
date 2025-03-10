@@ -40,9 +40,11 @@ InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKE
  #define NTP_TIMEZONE  "UTC"
 
 #define WRITE_PRECISION WritePrecision::MS  // MS
-#define MAX_BATCH_SIZE 50
+
+#define MAX_POINT_SIZE 100
+#define MAX_BATCH_SIZE (3 * MAX_POINT_SIZE)
 // The recommended size is at least 2 x batch size.
-#define WRITE_BUFFER_SIZE 3 * MAX_BATCH_SIZE
+#define WRITE_BUFFER_SIZE (2 * MAX_BATCH_SIZE)  // 3 data point
 
 // Strength of the calibration operation;
 // 0: disables calibration.
@@ -103,8 +105,9 @@ Point iflxSensor("wifi_status");
 WiFiMulti wifiMulti;
 uint8_t WiFiStatus = WL_DISCONNECTED;
 
-const unsigned long imu_semp_period = 10000; // in us
-unsigned int point2Send = 0; //100; // in us
+unsigned int point2Send = 0; //100; 
+unsigned long nextPoint; // in ms
+const unsigned long imu_semp_period = 100; // in ms
                                              //
 int connect_wifi(int retries) {
     int status = WL_IDLE_STATUS; // the Wifi radio's status
@@ -118,7 +121,8 @@ int connect_wifi(int retries) {
             //log_i("IP address: ");
             IPAddress ip = WiFi.localIP();
             M5_LOGI("IPAddress %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-            //M5.Display.print("WiFi connected.");
+            M5.Display.setCursor(0,90);
+            M5.Display.print("WiFi connected.");
             break;
         }
         else {
@@ -317,7 +321,7 @@ void setup(void)
 
   M5.Log.println("RTC found.");
 
-
+/*
   switch (imu_type)
   {
   case m5::imu_none:        name = "not found";   break;
@@ -329,27 +333,31 @@ void setup(void)
   default:                  name = "unknown";     break;
   };
   M5_LOGI("imu:%s", name);
-  //M5.Display.printf("imu:%s", name);
+  M5.Display.setCursor(0,20);
+  M5.Display.printf("imu:%s", name);
 
   if (imu_type == m5::imu_none)
   {
     for (;;) { delay(1); }
   }
+*/ 
 
 //[   264][I][main.cpp:230] setup(): imu W, H:240, 135
   int32_t w = dsp.width();
   int32_t h = dsp.height();
   if (w < h)
-  {
+  { /// Landscape mode.
     dsp.setRotation(dsp.getRotation() ^ 1);
     w = dsp.width();
     h = dsp.height();
   }
-  M5_LOGI("imu W, H:%d, %d", w, h);
+  M5_LOGI("dsp W, H:%d, %d", w, h);
   int32_t graph_area_h = ((h - 8) / 18) * 18;
   int32_t text_area_h = h - graph_area_h;
   float fontsize = text_area_h / 8;
   dsp.setTextSize(fontsize);
+  M5.Display.setCursor(0,80);
+  M5.Display.printf("dsp W, H:%d, %d F%.2f", w, h, fontsize);
 
   rect_graph_area = { 0, 0, w, graph_area_h };
   rect_text_area = {0, graph_area_h, w, text_area_h };
@@ -373,6 +381,7 @@ void setup(void)
 // Add tags to the data point
     iflxSensor.addTag("device", DEVICE);
     iflxSensor.addTag("SSID", WiFi.SSID());
+    nextPoint = millis() + 2 * imu_semp_period;
    /*
    if (WiFiStatus == WL_CONNECTED) {
        //iflxSensor.addTag("experiment", "calorimetryEsp32C3");
@@ -386,7 +395,7 @@ void setup(void)
 void loop(void)
 {
   static uint32_t frame_count = 0;
-  static uint32_t prev_sec = 0;
+  static uint32_t next_sec = 0;
   static constexpr const char* const wd[7] = {"Sun","Mon","Tue","Wed","Thr","Fri","Sat"};
 
   // To update the IMU value, use M5.Imu.update.
@@ -399,24 +408,30 @@ void loop(void)
     drawGraph(rect_graph_area, data);
      // Report networks (low priority data) in case we successfully wrote the previous batch
     if (!client.isBufferFull()) {
-    if (point2Send > 0) {
-        // Set identical time for the whole network scan
-        time_t tnow = time(nullptr);
-        Point sensorImu("imu_data");
-        sensorImu.addTag("device", DEVICE);
-        sensorImu.addField("gyro.x", data.gyro.x);
-        sensorImu.addField("gyro.y", data.gyro.y);
-        sensorImu.addField("gyro.z", data.gyro.z);
-        //sensorImu.setTime(tnow);  //set the time
-          if (!client.writePoint(sensorImu)) {
-              M5_LOGE("InfluxDB write failed: %s",
-                      client.getLastErrorMessage().c_str());
-          }
-          //else
-              point2Send--;
+        unsigned long now_ms = millis();
+        if ( now_ms > nextPoint  &&  point2Send > 0) {
+            nextPoint = now_ms + imu_semp_period;
+            // Set identical time for the whole network scan
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+
+            Point sensorImu("imu_data");
+            sensorImu.addTag("device", DEVICE);
+            sensorImu.addField("gyro.x", data.gyro.x);
+            sensorImu.addField("gyro.y", data.gyro.y);
+            sensorImu.addField("gyro.z", data.gyro.z);
+            sensorImu.setTime(getTimeStamp(&tv,3)); // WritePrecision::MS: 
+            //sensorImu.setTime(tnow);  //set the time
+            //sensorImu.setTime(WritePrecision::MS); //  Sets the timestamp to the actual time in the desired precision
+            if (!client.writePoint(sensorImu)) {
+                M5_LOGE("InfluxDB write failed: %s",
+                        client.getLastErrorMessage().c_str());
+            }
+            else
+                point2Send--;
+        }
     }
-    }
-     else
+    else
          M5_LOGW("IMU reporting skipped due to communication issues");
 /*
     // The data obtained by getImuData can be used as follows.
@@ -449,8 +464,9 @@ void loop(void)
 
     // Calibration is initiated when a button or screen is clicked.
     if (M5.BtnA.wasClicked() ){
-        M5_LOGW("M5.BtnA.wasClicked");
-        point2Send = 20;
+        M5_LOGW("M5.BtnA.wasClicked Starting ACQ");
+        point2Send = MAX_POINT_SIZE ;
+        next_sec = millis() / 1000 + 10; // delay InfluxDB Flush 10 sec
     }
     if (M5.BtnPWR.wasClicked() || M5.Touch.getDetail().wasClicked())
     {
@@ -459,19 +475,22 @@ void loop(void)
   }
 
   int32_t sec = millis() / 1000;
-  if (prev_sec != sec)
+  if (sec >= next_sec)
   {
       // ESP32 internal timer
       auto t = time(nullptr);
       {
           auto tm = gmtime(&t);    // for UTC.
-          M5.Display.setCursor(0,20);
+          //M5.Display.setCursor(0,20);
           M5.Log.printf("ESP32 UTC  :%04d/%02d/%02d (%s)  %02d:%02d:%02d\r\n",
                   tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
                   wd[tm->tm_wday],
                   tm->tm_hour, tm->tm_min, tm->tm_sec);
       }
-      prev_sec = sec;
+      String tC = iflxSensor.getTime();
+                                //M5.Display.setCursor(0,20);
+      //M5.Log.printf("IDB Point UTC  %s:", tC.c_str());
+      next_sec = sec + 2 ;
       M5_LOGI("sec:%d  frame:%d", sec, frame_count);
       frame_count = 0;
 
