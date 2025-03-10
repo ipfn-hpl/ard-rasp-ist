@@ -44,7 +44,7 @@
 #define NTP_TIMEZONE  "UTC"
 
 
-#define WRITE_PRECISION WritePrecision::US
+#define WRITE_PRECISION WritePrecision::S
 #define MAX_BATCH_SIZE 500
 // The recommended size is at least 2 x batch size.
 #define WRITE_BUFFER_SIZE 3 * MAX_BATCH_SIZE
@@ -359,18 +359,22 @@ void setup() {
     }
     // Add constant tags - only once
     if (WiFiStatus == WL_CONNECTED) {
-        iflx_sensor.addTag("experiment", "calorimetryM5S");
+        char buffer[32];
+
+        sprintf(buffer,"M5SCP2-%s", WiFi.macAddress().c_str());
+        //iflx_sensor.addTag("experiment", "calorimetryM5S");
+        iflx_sensor.addTag("experiment", buffer);
 
         // Check server connection
         if (client.validateConnection()) {
            M5_LOGI("Connected to InfluxDB: %s", 
                    client.getServerUrl().c_str());
+           client.setWriteOptions(WriteOptions().writePrecision(WRITE_PRECISION));
         } else {
             M5_LOGW("InfluxDB connection failed: %s",
                 client.getLastErrorMessage());
         }
     }
-
 }
 
 void update_display() {
