@@ -122,7 +122,7 @@ int connect_wifi(int retries) {
             IPAddress ip = WiFi.localIP();
             M5_LOGI("IPAddress %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
             M5.Display.setCursor(0,90);
-            M5.Display.print("WiFi connected.");
+            dsp.printf("WiFi %s", WiFi.SSID().c_str());
             break;
         }
         else {
@@ -311,7 +311,7 @@ void setup(void)
 
   const char* name;
   auto imu_type = M5.Imu.getType();
-//[   262][I][main.cpp:214] setup(): imu:mpu6886
+//[   262][I][main.cpp:214] setup(): imu:mpu6886 M5Stack 6-Axis IMU Unit (MPU6886)
 
  if (!M5.Rtc.isEnabled())
   {
@@ -357,7 +357,8 @@ void setup(void)
   float fontsize = text_area_h / 8;
   dsp.setTextSize(fontsize);
   M5.Display.setCursor(0,80);
-  M5.Display.printf("dsp W, H:%d, %d F%.2f", w, h, fontsize);
+  //M5.Display.printf("dsp W, H:%d, %d F%.2f", w, h, fontsize);
+  dsp.printf("dsp W, H:%d, %d F%.2f", w, h, fontsize);
 
   rect_graph_area = { 0, 0, w, graph_area_h };
   rect_text_area = {0, graph_area_h, w, text_area_h };
@@ -427,8 +428,16 @@ void loop(void)
                 M5_LOGE("InfluxDB write failed: %s",
                         client.getLastErrorMessage().c_str());
             }
-            else
+            else {
+
+                M5.Display.setCursor(0, 100);
+                dsp.printf("                              ");
+                M5.Display.setCursor(0, 100);
+                //M5.Display.print("Gyro X:%.1f Y:%.1f  Y:%.1f", data.gyro.x,
+                dsp.printf("Gyro X:%.1f Y:%.1f  Y:%.1f", data.gyro.x,
+                       data.gyro.y, data.gyro.z);
                 point2Send--;
+            }
         }
     }
     else
