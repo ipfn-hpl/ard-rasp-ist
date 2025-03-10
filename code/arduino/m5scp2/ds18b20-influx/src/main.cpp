@@ -228,30 +228,6 @@ unsigned setup_dallas(){
             break;
         }
     }
-    /*
-    if (!dt_oneWire.isConnected(redThermometer))
-    {
-            M5_LOGE("Unable to find Device 0 (red)");
-    }
-    else {
-        cpyDtAddress(ds18Sensors[0], redThermometer);
-        dt_oneWire.setResolution(ds18Sensors[0], TEMPERATURE_PRECISION);
-        Serial.print("Red Temp sensor, Resolution: ");
-        Serial.println(dt_oneWire.getResolution(ds18Sensors[0]), DEC);
-        found++;
-    }
-    if (!dt_oneWire.isConnected(blueThermometer))
-    {
-            M5_LOGE("Unable to find Device 1 (blue)");
-    }
-    else {
-        cpyDtAddress(ds18Sensors[1], blueThermometer);
-        dt_oneWire.setResolution(ds18Sensors[1], TEMPERATURE_PRECISION);
-        Serial.print("Blue Temp sensor, Resolution: ");
-        Serial.println(dt_oneWire.getResolution(ds18Sensors[1]), DEC);
-        found++;
-    }
-    */
     return found;
 }
 
@@ -291,7 +267,7 @@ int connect_wifi(int retries) {
         }
     }
     else
-        M5_LOGE(" Fail to connect WiF, giving up.");
+        M5_LOGE(" Fail to connect WiFi, giving up.");
     return status;
 }
 
@@ -396,33 +372,7 @@ void setup() {
     }
 
 }
-/*
-void update_display() {
-    // ColorLCD 135 x 240
 
-    if (!displayPaused) {
-        int percentage = getStableBatteryPercentage();
-        StickCP2.Display.clear();
-        StickCP2.Display.setCursor(10, 20);
-        StickCP2.Display.printf("BAT: %d%%", percentage);
-        StickCP2.Display.setCursor(120, 20);
-        //StickCP2.Display.setTextSize(0.7);
-        StickCP2.Display.printf("%dmV", StickCP2.Power.getBatteryVoltage());
-        StickCP2.Display.setCursor(10, 40);WiFi.macAddress()
-        if (WiFiStatus == WL_CONNECTED) 
-            StickCP2.Display.printf("WiFi: Connected");
-        else
-            StickCP2.Display.printf("WiFi: %d", WiFiStatus);
-
-        StickCP2.Display.setCursor(10, 60);
-        StickCP2.Display.printf("T0: %.2f C", sensorTemp[0]);
-        StickCP2.Display.setCursor(120, 60);
-        StickCP2.Display.printf("T1: %.2f C", sensorTemp[1]);
-//        StickCP2.Display.printf("T0: %.2F T1: %.f\n", sensorTemp[0], sensorTemp[1]);
-        //StickCP2.Display.setTextSize(1);
-   }
-}
-*/
 void update_display() {
     // ColorLCD 135 x 240
 
@@ -435,7 +385,7 @@ void update_display() {
         //M5.Display.printf("%dmV",
         M5.Display.setCursor(10, 40);
         if(WiFiStatus == WL_CONNECTED) {
-            M5.Display.printf("WiFi: Connected  %s", WiFi.SSID().c_str());
+            M5.Display.printf("WiFi: %s", WiFi.SSID().c_str());
             IPAddress ip = WiFi.localIP();
             //M5.Display.printf(" %s", ip.toString());
             //M5.Display.printf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
@@ -443,7 +393,7 @@ void update_display() {
         else
             M5.Display.printf("WiFi: %d", WiFiStatus);
         M5.Display.setCursor(0, 60);
-        M5.Display.printf("Tr: %.2f Tb: %.2f ", sensorTemp[0], sensorTemp[1]);
+        M5.Display.printf("TRed %.2fC TBlue %.2f C", sensorTemp[0], sensorTemp[1]);
         if(sensorDiff != 0.0)
             M5.Display.printf("Eq");
    }
@@ -504,7 +454,7 @@ void loop() {
         dt_oneWire.requestTemperatures();
         sensorTemp[0] = dt_oneWire.getTempC(redThermometer);
         sensorTemp[1] = dt_oneWire.getTempC(blueThermometer) - sensorDiff;
-        M5_LOGI("Tred %.2f  Tblue: %.2f", sensorTemp[0], sensorTemp[1]);
+        M5_LOGI("Tred %.2f ºC  Tblue: %.2f ºC", sensorTemp[0], sensorTemp[1]);
         update_display();
 
         //if (wifiMulti.run() == WL_CONNECTED) {
