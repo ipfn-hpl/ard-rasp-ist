@@ -1,13 +1,13 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 """
 
 
 export INFLUXDB_TOKEN="****"
 
-2024-10-24T09:42:44.264163902Z  2024-10-24T09:42:55.264163902Z
 """
 
-# import influxdb_client
 import os
 # import time
 from influxdb_client import InfluxDBClient
@@ -17,10 +17,10 @@ from influxdb_client import InfluxDBClient
 import matplotlib.pyplot as plt
 
 plt.close("all")
-# import matplotlib
-
+org = "7ffb1a7998038e38"
+# define INFLUXDB_BUCKET "ardu-rasp"
 token = os.environ.get("INFLUXDB_TOKEN")
-org = "IPFN-IST"
+# org = "IPFN-IST"
 url = "http://kane584.tecnico.ulisboa.pt:8086"
 
 client = InfluxDBClient(url=url, token=token, org=org)
@@ -34,14 +34,14 @@ query_api = client.query_api()
 query_fmt = """from(bucket:"ardu-rasp") 
 |> range(start:{}, stop:{})
 |> filter(fn: (r) => r._measurement == "imu_data"
-and  (r._field == "accel_x" or r._field == "accel_y" or r._field == "accel_z"))
+and  (r._field == "gyro.x" or r._field == "gyro.y" or r._field == "gyro.z"))
 |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 """
 
-start = '2024-10-24T09:42:00Z'
-stop = '2024-10-24T09:42:55Z'
+
+start = '2025-03-10T10:21:00Z'
+stop = '2025-03-10T10:22:00Z'
 query = query_fmt.format(start, stop)
-# tables = query_api.query(query, org="IPFN-IST")
 
 # for table in tables:
 #    for record in table.records:
@@ -53,14 +53,14 @@ imu_stats = client.query_api().query_data_frame(org=org, query=query)
 # i mu_stats.drop(columns=['result', 'table', 'start', 'stop'])
 df = imu_stats.drop(columns=['result', 'table',
                              '_start', '_stop', '_measurement'])
-ax1 = df.plot.scatter(x='_time',
-                      y='accel_x',
-                      c='DarkBlue')
-ax2 = df.plot.scatter(x='_time',
-                      y='accel_y',
-                      c='Green', ax=ax1)
-ax3 = df.plot.scatter(x='_time',
-                      y='accel_z',
-                      c='Red', ax=ax1)
+ax1 = df.plot.line(x='_time',
+                   y='gyro.x',
+                   c='DarkBlue', style='-o')
+ax2 = df.plot.line(x='_time',
+                   y='gyro.y',
+                   c='Green', ax=ax1)
+ax3 = df.plot.line(x='_time',
+                   y='gyro.z',
+                   c='Red', ax=ax1)
 # imu_stats.head()
 plt.show()
