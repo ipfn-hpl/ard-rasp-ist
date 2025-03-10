@@ -98,6 +98,7 @@ float sensorTemp[max_sensors];
 float sensorDiff = 0.0;
 int buttonState;
 
+//MAC: 0c:8b:95:b4:78:64 Index 1
 #define NRSENSORS  2
 uint8_t redThermometers[NRSENSORS][8] = {
     {0x28, 0xC0, 0x48, 0x8B, 0xB0, 0x23, 0x09, 0xAF},
