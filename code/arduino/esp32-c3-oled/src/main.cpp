@@ -40,7 +40,7 @@ ONE_BIT_DISPLAY obd;
 #define WIFI_RETRIES 15
 WiFiMulti wifiMulti;
 uint8_t WiFiStatus = WL_DISCONNECTED;
-bool ledState = false;
+bool bootState = true; // active low
 
 // Data wire is plugged into port G33 on the M5Stick
 #define ONE_WIRE_BUS 2
@@ -356,8 +356,8 @@ void setup() {
 void loop() {
         unsigned long currentMillis = millis();
         //ledState = not ledState;
-        ledState = digitalRead(BOOTSEL_PIN);
-        if(not ledState) {
+        bootState = digitalRead(BOOTSEL_PIN);
+        if(not bootState) {
             sensorDiff = dt_oneWire.getTempC(blueThermometer) - dt_oneWire.getTempC(redThermometer);
             digitalWrite(LED_PIN, false); // Turn ON
         }
