@@ -248,27 +248,31 @@ int connect_wifi(int retries) {
             IPAddress ip = WiFi.localIP();
             M5_LOGI("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
         //timeSync(TZ_INFO, "ntp1.tecnico.ulisboa.pt", "pool.ntp.org");
-            //M5.Display.print("WiFi connected.");
             break;
         }
         else {
-        //if(wifiMulti.run() != WL_CONNECTED) {
-            //while(wifiMulti.run() != WL_CONNECTED) {
             M5_LOGW(".");
             delay(500);
         }
     }
     if (status == WL_CONNECTED) {
         //#if SNTP_ENABLED
-        M5.Log.println("SNTP ENABLED.\n");
-        while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED)
-        {
+        M5_LOGV("SNTP ENABLED. Trying to sync to NTP clock");
+        status = WL_IDLE_STATUS;
+        for(int i = 0; i < retries; i++) {
+         //while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED)
+            if(sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
+                M5_LOGI("NTP Synched!");
+                status = WL_CONNECTED;
+                break;
+            }
             M5.Log.print(".");
             M5.delay(1000);
         }
     }
     else
-        M5_LOGE(" Fail to connect WiFi, giving up.");
+        M5_LOGE("Fail to connect WiFi. I give up.");
+
     return status;
 }
 
