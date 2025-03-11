@@ -12,15 +12,18 @@ Compiling Instructions:
 ```bash
 git repo clone https://github.com/ipfn-hpl/ard-rasp-ist.git 
 ```  
-    1. Hardware [M5StickC PLUS2](https://docs.m5stack.com/en/core/M5StickC%20PLUS2)
+
+    1. Hardware [M5StickC PLUS2](https://docs.m5stack.com/en/core/M5StickC%20PLUS2)  
 ```bash
 cd ard-rasp-ist/code/arduino/m5scp2/ds18b20-influx
 ```
-    2. Hardware [ESP32-C3 0.42-Inch Oled](https://www.aliexpress.com/item/1005007715518362.html)
+
+    2. Hardware [ESP32-C3 0.42-Inch Oled](https://www.aliexpress.com/item/1005007715518362.html)  
 ```bash
 cd ard-rasp-ist/code/arduino/m5scp2/esp32-c3-oled
 ```
 4. Compile, Upload firmware an monitor serial output
+
 ```bash
 pio run -t upload -t monitor
 ```
