@@ -372,8 +372,8 @@ void loop() {
                     sensorTemp[0],  sensorTemp[1]);     // Information messages which describe normal flow of events
             //WiFiStatus = wifiMulti.run();
             obd.setCursor(0,0);
-            obd.printf("TRed: %.2f \n\n", sensorTemp[0]);
-            obd.printf("TBlue: %.2f \n\n", sensorTemp[1]);
+            obd.printf("TR %.2f\n\n", sensorTemp[0]);
+            obd.printf("TB %.2f\n\n", sensorTemp[1]);
             obd.printf("WiFi: %d", WiFiStatus);
             obd.display();
             time_t tnow = time(nullptr);
