@@ -8,10 +8,10 @@ Arduino + RaspberryPi Physics Laboratories
 Compiling Instructions:  
 1. Install [PlatformIO CLI tools](https://docs.platformio.org/en/latest/core/installation/methods/installer-script.html#super-quick-macos-linux)
 2. (Alternative: Install [VS Code GUI](https://code.visualstudio.com) plus PlatformIO *Extensions*.)
-3. Checkout ard-rasp-ist Github [Project](https://github.com/ipfn-hpl/ard-rasp-ist)
+3. Checkout *ard-rasp-ist* Github [Project](https://github.com/ipfn-hpl/ard-rasp-ist)  
 ```bash
 git repo clone https://github.com/ipfn-hpl/ard-rasp-ist.git 
-```
+```  
     1. Hardware [M5StickC PLUS2](https://docs.m5stack.com/en/core/M5StickC%20PLUS2)
 ```bash
 cd ard-rasp-ist/code/arduino/m5scp2/ds18b20-influx
