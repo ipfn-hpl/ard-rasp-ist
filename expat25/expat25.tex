@@ -29,7 +29,7 @@ It also provides with an University teaching staff an increased flexibility in p
 This does not aim to replace traditional laboratory experiments which resort to more sophisticated and dedicated equipment,
 but instead to complement such experiments with more simplified experiments that may be setup on an as needed basis.
 The authors will present at the exhibition one or two live experiments, and the participants will be invited to play 
-and take measurements of physical quantities with great accuracy.
+and take measurements of physical quantities with great precision.
 
 \end{abstract}
 
@@ -64,8 +64,9 @@ The Rpi will host all the developing  apps, communications infrastructure, datab
  that are fully wireless, since include a battery and connect directly to Wifi.
  %(An example is shown in `Fig.~\ref{figM5}'')
 
- Two different architectures are envisaged, one Unitary to be used by the instructor during regular classes, and one Multiple (``Fig.~\ref{figMultiple}''),
- where a complete hardware kit is lended to groups/individuals. 
+ Two different architectures are envisaged, one Unitary is used by the instructor during regular classes, 
+ and one Multiple (``Fig.~\ref{figMultiple}''),
+ where a complete hardware kit is lend to groups/individuals. 
  In both configurations all experimental data is stored in Cloud-based Time Series Database\cite{b3} (TSDB).
  
 \begin{figure}[htbp]
@@ -83,21 +84,23 @@ Each briefcase size is “1 Storage Unit” (1SU), allowing easy and flexible tr
 The equipment is to be applied to a very wide range of experiments, ranging from under-graduate courses laboratory experiments (fundamental physics), 
 to more advanced experiments in master courses. 
 But most of all, the equipment is to have robust and well-maintained documentation, 
-following the best “Libre” software/hardware practices, encouraging users to come up with novel experiments.
+following the best “Open” software/hardware practices, encouraging users to come up with novel experiments.
 
 A live library of experiments, with a description of the selected instrumentation, and the associated tailored code will be maintained and made available in a seamless fashion. 
 This means for example providing dedicated ISO’s that only require flashing on the Raspberry/Arduino SD cards, after which the diagnostic setup is ready for deployment,
 or a more sophisticated option of providing a library of configurations of the chip to be loaded on a case-by-case basis.
 
-Each experiment would have an associated laboratory guide, either in PDF, or wiki form (or both) and one or more Jupyter\cite{j2} Notebooks ready to be used by students. 
+Each experiment would have an associated laboratory guide, either in PDF, or wiki form (or both) and one or more Jupyter\cite{b4} Notebooks ready to be used by students. 
 
-A dedicated platform for exchange of information/code/documentation/etc. was developed and hosted on a public Github\cite{gh} repositóry. 
+A dedicated platform for exchange of information/code/documentation/etc. was developed and hosted on a public Github\cite{gh} repository. 
 At later stages of the project, after successful proof-of-concept deployments of the sensor suite, more experiment will be added.
 
 
 \section{Pilot Experiments}
 A demo prototype was assembled and was already used in a initial set of Laboratory demonstrations. 
-All demos were concluded at IST (See ``Tab.~\ref{tab1}'', in regular classes.
+All demos were concluded at  undergraduate engineering IST (See ``Tab.~\ref{tab1}''), in the first part of regular classes (about 30 minutes each).
+The feedback from students were strongly motivating and the suggestion that groups could experiment themselves 
+or even bring then home the kit was seen as very attractive.
 
 \begin{table}[htbp]
 \caption{List of Pilot Experiments}
@@ -118,8 +121,11 @@ Civil Eng. & 2nd&  Thermodynamics & Stirling Engine\\
 \end{table}
 
 \subsection{Maxwell Wheel Experiment}
-The Maxwell Wheel is a introductory Physics Lab project where the students are invited to estimate the Wheel's Inertial Momentum  $I_z$,
-to do so they must perform a long and time consuming measurement series of time and velocity, in different positions. The apparatus is depited in ``Fig.~\ref{figMaxwell}''.
+The Maxwell Wheel is a introductory Physics Lab project\cite{b6} where the students are 
+invited to estimate the Wheel's Inertial Momentum  $I_z$,
+to do so they must perform a long and time consuming measurement series of time and velocity, 
+in different positions. 
+The apparatus is depicted in ``Fig.~\ref{figMaxwell}''.
 
 \begin{figure}[htbp]
     \centerline{\includegraphics[width=.6\columnwidth]{maxwell.png}}
@@ -127,7 +133,7 @@ to do so they must perform a long and time consuming measurement series of time 
 \label{figMaxwell}
 \end{figure}
 
-While the wheel is  fallingi, The Mechanical Energy is described by :
+While the wheel is  falling, the Mechanical Energy is described by :
 \begin{IEEEeqnarray}{lcr}
     E_{mec}  &=&   E_{pot} +  E_{cin} +  E_{rot} \label{eq:max}\\
      &=&   m g h + \frac{1}{2} m v^2 + \frac{1}{2}  I_z w^2 \label{eq:max1}
@@ -140,20 +146,20 @@ can be related to  the rotation angle, $\theta$i, ($\omega=\dot{\theta}$), the t
 \end{equation}
 where $r$ is the radius of the axis where the suspending wire is wounded.
 
-Assuming Energy is kept constant, due the obderved linear speeds, we get: 
+Assuming Energy is kept constant, due the small attained linear speeds, we get: 
 \begin{IEEEeqnarray}{lcr}
-    \dot{w} &=& \gamma = \frac{m g  r}{m r^2 +  I_z} \label{eq:maxGamma}\\
-     Iz &=&  m \frac{ g  r  - \gamma  r^2  }{\gamma}
+    \dot{w} &=& \gamma = \frac{m g  r}{m r^2 +  I_z} \label{eq:maxgamma}\\
+     Iz &=&  m \frac{ g  r  - \gamma  r^2  }{\gamma}\label{eq:maxIz}
 \end{IEEEeqnarray}
 
 Traditionally the positions and velocity are measured  with the help of an optical barrier, that has to be moved in small steps (``Fig.~\ref{figMaxwell}''). 
 The triggering device is fragile, often fails which disturb student's attention. 
 
-Using this novel platform a small M5Stick/Arduino is attached close to the   the wheel's axis.
+Using this novel platform a small M5Stick/Arduino is attached close to the wheel's axis.
 The acquisition  cycle is started for a defined interval and the wheel is left to fall. No electronic trigger is necessary, since the data in taken continuously.
 The small board, while showing the value bars on  display, and sends 
  the 6 signals of the inertial measurement unit (IMU) (speed of rotation and gravity vector 3D components). The values are stored in a InfluxDB server hosted in the Rpi. 
- A Grafana server\cite{w1} allows an user friendly plotting and retrieval tool, including in mobile devices, 
+ A Grafana server\cite{b7} allows an user friendly plotting and retrieval tool, including in mobile devices, 
  without the need to install any App other than a plain Web Browser (``Fig.~\ref{figIMU}'').
 
 On an single experiment run, a simple Linear Fit on the angular velocity data, gives a very precise value of the angular acceleration,
@@ -168,7 +174,7 @@ that could be used to validate other sparse data point taken with the barrier.
 
 
 \subsection{Experimental results}
-The data values for the Z-direction angular velocity (parallel to the Wheel's axys) were extrated usinh a Jupyther Nobook, as shown in ``Fig.~\ref{figAngleVel}''. 
+The data values for the Z-direction angular velocity (parallel to the Wheel's axis) were extracted using a Jupyter Notebook, as shown in ``Fig.~\ref{figAngleVel}''. 
 
 \begin{figure}[htbp]
 \centerline{\includegraphics[width=.8\columnwidth]{AngAccel.png}}
@@ -176,7 +182,7 @@ The data values for the Z-direction angular velocity (parallel to the Wheel's ax
 \label{figAngleVel}
 \end{figure}
 
-The Linear Reggression on data is shown below. 
+The Linear Regression on data is shown below. 
 To calculate $p=95\%$ confidence interval on slope and intercept, we used a two-sided inverse Students t-distribution, with (N-2) degrees of freedom:
 
 \begin{itemize}
@@ -184,21 +190,40 @@ To calculate $p=95\%$ confidence interval on slope and intercept, we used a two-
 
     \item Intercept : 0.2022 $\pm$ $\SI{0.0531}{\radian\per\second}$.
 \end{itemize}
+
+Finally, using ``(\eqref{eq:maxIz})'', the calculated Inertial Momentum was:
+\begin{equation}
+     Iz  = \SI{1.43e-3}{\kg\meter\squared}
+\end{equation}
+with a standard error of few $\mu\SI{}{\kg\meter\squared}$, well bellow the relative precision of any instrument used in the class laboratories.
   
 %\si{8.85e-12}{\coulomb\squared\per\newton\per\meter\squared}$
 \section{Societal Impact in the Higher Teaching frame of reference}
 This pedagogical project may potentially have a significant societal impact on the way teaching is conducted in higher education institutions, 
-by bringing pinpoint capacities for simple and flexible laboratory experiments in teaching courses who may on a first approach not have considered the possibility for conducting experiments.
-The tool will be implemented at Teaching Unit @ Shangai University, Spring 2025
+by bringing pinpoint capacities for simple and flexible laboratory experiments in 
+teaching courses who may on a first approach not have considered the possibility for conducting experiments.
+More specifically this project adheres to a certain number of key constraints:
+\begin{itemize}
+    \item Portability
+    \item Flexibility
+    \item Availability
+    \item Low-cost
+\end{itemize}
+
+To conclude, and to highlight the potential for internationalization, we announce that 
+this concept and prototype will be implemented at Teaching Unit @ Shangai University, Spring 2025
 
 \begin{thebibliography}{00}
 \bibitem{b1}Giovanni Organtini, ``Physics Experiments with Arduino and Smartphones,''
 Springer International Publishing, January 2021, DOI: 10.1007/978-3-030-65140-4.
+
+Physics Department, IST, February 2024.
 \bibitem{b2} https://en.wikipedia.org/wiki/Arduino
 \bibitem{b3} https://en.wikipedia.org/wiki/InfluxDB
-\bibitem{w3} https://en.wikipedia.org/wiki/Grafana
-\bibitem{j2} https://jupyter.org 
+\bibitem{b4} https://jupyter.org 
 \bibitem{gh} https://github.com/ipfn-hpl/ard-rasp-ist
+\bibitem{b6}João Mendanha, et al, ``Mechanical Energy Conservation in Maxwell Wheel, Laboratory Guide,'' (in portuguese),
+\bibitem{b7} https://en.wikipedia.org/wiki/Grafana
 \end{thebibliography}
 
 \end{document}
