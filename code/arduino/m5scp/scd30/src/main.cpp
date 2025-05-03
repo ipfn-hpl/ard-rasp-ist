@@ -20,14 +20,19 @@
 #define WIFI_RETRIES 15
 #define NTP_SERVER1  "ntp04.oal.ul.pt"
 #define NTP_SERVER2  "ntp1.tecnico.ulisboa.pt"
-#define NTP_SERVER3   "1.pool.ntp.org"
+#define NTP_SERVER3  "1.pool.ntp.org"
 #define NTP_TIMEZONE  "UTC"
 
+#define DEVICE "M5StickC-1"
+
 #define WRITE_PRECISION WritePrecision::MS
+#define SAMPLE_PERIOD 5  // in sec
 
 // Declare InfluxDB client instance with preconfigured InfluxCloud certificate
 InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN, InfluxDbCloud2CACert);
 
+// Declare Data point
+Point iflxPoint("SCD30");
 
 Adafruit_SCD30  scd30;
 
@@ -162,11 +167,21 @@ void setup(void)
   dsp.printf("dsp W, H:%d, %d F%.2f", w, h, fontsize);
 
   if (!scd30.begin()) {
-  M5_LOGW("Failed to find SCD30 chip");
+      M5_LOGW("Failed to find SCD30 chip");
     //while (1) { delay(10); }
   }
   M5_LOGI("SCD30 Found!");
   M5.Log.printf("text_area_h:%d fontsize:%.2f", text_area_h, fontsize);
+
+  M5_LOGI("Attempting to connect to SSID: ");
+  for(int i = 0; i < NUM_SSID; i++) {
+      wifiMulti.addAP(ssids[i], pass[i]);
+  }
+  WiFiStatus = connect_wifi(WIFI_RETRIES);
+  iflxPoint.addTag("device", DEVICE);
+   //Serial.println
+   // Add constant tags - only once
+  delay(1000);
   // M5.Log.printf("SDA %d, SCL %d\n", SDA, SCL);
   // SDA 32, SCL 33
 
@@ -178,11 +193,17 @@ void setup(void)
 void loop(void) {
 
     int32_t sec = millis() / 1000;
-    if (sec >= next_sec)
-    {
-        next_sec = sec + 2;
+    if ((sec & 0x1FF) == 0)
+    { 
+        //WiFiStatus = wifiMulti.run();
+        if(WiFi.status() != WL_CONNECTED) 
+            WiFiStatus = connect_wifi(WIFI_RETRIES);
+    }
+    if (sec >= next_sec) {
+        next_sec = sec + SAMPLE_PERIOD;
         M5.Log.printf("Hello %d ", sec);
         if (scd30.dataReady()) {
+
             M5_LOGI("Data available!");
             if (scd30.read()){
                 //M5.Log.printf("Temperature: %.3f\n", scd30.temperature);
@@ -195,16 +216,26 @@ void loop(void) {
                         scd30.relative_humidity);
                 M5.Display.setCursor(0, 60);
                 dsp.printf("CO2:%.3f ppm", scd30.CO2);
+                if(WiFiStatus == WL_CONNECTED) 
+                    iflxPoint.clearFields();
+                    iflxPoint.addField("Temp", scd30.temperature);
+                    iflxPoint.addField("RH", scd30.relative_humidity);
+                    iflxPoint.addField("CO2", scd30.CO2);
+                    if (!client.writePoint(iflxPoint)) {
+                        M5_LOGE("InfluxDB write failed: %s",
+                                client.getLastErrorMessage().c_str());
+                    }
             }
             else
                 M5_LOGW("Error reading sensor data");
         }
         else
             M5_LOGW("Data Not available!");
-        if ((sec & 7) == 0)
-        { // prevent WDT.
-            vTaskDelay(1);
-        }
+    }
+
+    if ((sec & 7) == 0)
+    { // prevent WDT.
+        vTaskDelay(1);
     }
 }
 
