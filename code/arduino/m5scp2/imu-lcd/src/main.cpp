@@ -1,9 +1,8 @@
 /*
  *  https://github.com/m5stack/M5Unified/tree/master/examples/Basic/Imu
+ *  influx query 'from(bucket:"ardu-rasp") |> range(start:-1m) |> filter(fn: (r) =>r._measurement == "imu_data")'
  *  */
 #include <Arduino.h>
-// If you use Unit LCD, write this.
-//#include <M5UnitLCD.h>
 // Include this to enable the M5 global instance.
 #include <M5Unified.h>
 
@@ -20,10 +19,6 @@
   #define SNTP_ENABLED 1
  #endif
 
-#ifndef SNTP_ENABLED
-#define SNTP_ENABLED 0
-#endif
-
 #include "arduino_secrets.h"
 
 #define DEVICE "ESP32"
@@ -38,14 +33,15 @@ InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKE
 #define NTP_SERVER2  "ntp1.tecnico.ulisboa.pt"
 #define NTP_SERVER3   "1.pool.ntp.org"
  #define NTP_TIMEZONE  "UTC"
+static constexpr const char* const wd[7] = {"Sun","Mon","Tue","Wed","Thr","Fri","Sat"};
 
-#define WRITE_PRECISION WritePrecision::MS  // MS
+#define WRITE_PRECISION WritePrecision::US  // MS
 
-#define MAX_POINT_SIZE 100
-#define MAX_BATCH_SIZE (3 * MAX_POINT_SIZE)
+//#define MAX_POINT_SIZE 100
+//#define MAX_BATCH_SIZE (3 * MAX_POINT_SIZE)
 // The recommended size is at least 2 x batch size.
-#define WRITE_BUFFER_SIZE (2 * MAX_BATCH_SIZE)  // 3 data point
-
+//#define WRITE_BUFFER_SIZE (2 * MAX_BATCH_SIZE)  // 3 data point
+#define MAX_POINTS 100  // 5 sec
 // Strength of the calibration operation;
 // 0: disables calibration.
 // 1 is weakest and 255 is strongest.
@@ -105,10 +101,16 @@ Point iflxSensor("wifi_status");
 WiFiMulti wifiMulti;
 uint8_t WiFiStatus = WL_DISCONNECTED;
 
-unsigned int point2Send = 0; //100; 
-unsigned long nextPoint; // in ms
-const unsigned long imu_semp_period = 100; // in ms
+unsigned int point2Send = MAX_POINTS; //100; 
+unsigned int point2Save = MAX_POINTS + 1;
+//const unsigned long imu_semp_period = 100; // in ms
                                              //
+m5::imu_data_t imuData[MAX_POINTS];
+int64_t time_start_us;
+struct timeval tv_start;
+struct timeval tv_data[MAX_POINTS];
+int64_t next_usec = 0;
+
 int connect_wifi(int retries) {
     int status = WL_IDLE_STATUS; // the Wifi radio's status
     // setup RTC ( NTP auto setting )
@@ -121,7 +123,7 @@ int connect_wifi(int retries) {
             //log_i("IP address: ");
             IPAddress ip = WiFi.localIP();
             M5_LOGI("IPAddress %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-            M5.Display.setCursor(0,90);
+            M5.Display.setCursor(0,100);
             dsp.printf("WiFi %s", WiFi.SSID().c_str());
             break;
         }
@@ -136,21 +138,12 @@ int connect_wifi(int retries) {
         // Syncing progress and the time will be printed to Serial.
         //timeSync(TZ_INFO,  NTP_SERVER1, NTP_SERVER2);
         //configTzTime(TZ_INFO, "ntp1.tecnico.ulisboa.pt", "pool.ntp.org", "time.nis.gov");
-#if SNTP_ENABLED
         M5.Log.println("SNTP ENABLED.\n");
         while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED)
         {
             M5.Log.print(".");
             M5.delay(1000);
         }
-#else
-        M5.delay(1600);
-        struct tm timeInfo;
-        while (!getLocalTime(&timeInfo, 1000))
-        {
-            M5.Log.print('.');
-        };
-#endif
         M5.Log.println("\r\nNTP Connected.");
         time_t t = time(nullptr)+1; // Advance one second.
         while (t > time(nullptr));  /// Synchronization in seconds
@@ -162,10 +155,10 @@ int connect_wifi(int retries) {
             // Set write precision to milliseconds. Leave other parameters default.
             // Enable messages batching and retry buffer
             client.setWriteOptions(
-                    WriteOptions().writePrecision(WRITE_PRECISION).batchSize(MAX_BATCH_SIZE).bufferSize(WRITE_BUFFER_SIZE));
+                    WriteOptions().writePrecision(WRITE_PRECISION));
+                    //WriteOptions().writePrecision(WRITE_PRECISION).batchSize(MAX_BATCH_SIZE).bufferSize(WRITE_BUFFER_SIZE));
         } else {
             M5_LOGE("InfluxDB connection failed: %s",
-            //Serial.println(
                     client.getLastErrorMessage().c_str());
         }
     }
@@ -321,26 +314,6 @@ void setup(void)
 
   M5.Log.println("RTC found.");
 
-/*
-  switch (imu_type)
-  {
-  case m5::imu_none:        name = "not found";   break;
-  case m5::imu_sh200q:      name = "sh200q";      break;
-  case m5::imu_mpu6050:     name = "mpu6050";     break;
-  case m5::imu_mpu6886:     name = "mpu6886";     break;
-  case m5::imu_mpu9250:     name = "mpu9250";     break;
-  case m5::imu_bmi270:      name = "bmi270";      break;
-  default:                  name = "unknown";     break;
-  };
-  M5_LOGI("imu:%s", name);
-  M5.Display.setCursor(0,20);
-  M5.Display.printf("imu:%s", name);
-
-  if (imu_type == m5::imu_none)
-  {
-    for (;;) { delay(1); }
-  }
-*/ 
 
 //[   264][I][main.cpp:230] setup(): imu W, H:240, 135
   int32_t w = dsp.width();
@@ -382,7 +355,6 @@ void setup(void)
 // Add tags to the data point
     iflxSensor.addTag("device", DEVICE);
     iflxSensor.addTag("SSID", WiFi.SSID());
-    nextPoint = millis() + 2 * imu_semp_period;
    /*
    if (WiFiStatus == WL_CONNECTED) {
        //iflxSensor.addTag("experiment", "calorimetryEsp32C3");
@@ -392,57 +364,178 @@ void setup(void)
    }
    */
 }
+uint64_t time_in_us(struct timeval * tv) {
+    return  (uint64_t)tv->tv_sec * 1000000L + (uint64_t)tv->tv_usec;
+}
 
-void loop(void)
+void timeval_add(struct timeval * tv, int64_t usecs_add) {
+    int64_t usecs_sum = (uint64_t)tv->tv_usec + usecs_add;
+    while (usecs_sum > 1000000L) {
+        usecs_sum -= 1000000L;
+        tv->tv_sec++;
+    }
+    tv->tv_usec = usecs_sum;
+}
+
+
+void loopImu(void)
 {
-  static uint32_t frame_count = 0;
-  static uint32_t next_sec = 0;
-  static constexpr const char* const wd[7] = {"Sun","Mon","Tue","Wed","Thr","Fri","Sat"};
+  struct timeval tv_now;
+  gettimeofday(&tv_now, NULL);
+  //int64_t time_us = micros();
 
   // To update the IMU value, use M5.Imu.update.
   // If a new value is obtained, the return value is non-zero.
   auto imu_update = M5.Imu.update();
-  if (imu_update)
-  {
-    // Obtain data on the current value of the IMU.
-    auto data = M5.Imu.getImuData();
-    drawGraph(rect_graph_area, data);
-     // Report networks (low priority data) in case we successfully wrote the previous batch
-    if (!client.isBufferFull()) {
-        unsigned long now_ms = millis();
-        if ( now_ms > nextPoint  &&  point2Send > 0) {
-            nextPoint = now_ms + imu_semp_period;
-            // Set identical time for the whole network scan
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
+  if (imu_update) {
+      auto data = M5.Imu.getImuData();
+      int64_t time_us = time_in_us(&tv_now);
+      drawGraph(rect_graph_area, data);
+      if ( time_us > next_usec && point2Save < MAX_POINTS) {
+          next_usec = time_us + (50 * 1000);
+          M5.Display.setCursor(0,10);
+          dsp.printf("              ");
+          M5.Display.setCursor(0,10);
+          dsp.printf("p2 %d", point2Save);
+          // Obtain data on the current value of the IMU.
+          //M5.Imu.getImuData(&imuData[point2Save]);
+          memcpy(&imuData[point2Save], &data, sizeof(m5::imu_data_t));
+          memcpy(&tv_data[point2Save], &tv_now, sizeof(struct timeval));
+          //unsigned long long getTimeStamp(struct timeval *tv, int secFracDigits = 3);
+          point2Save++;
+      }
+  }
+  else if (point2Save == MAX_POINTS) {
+      //M5_LOGW("Print ACQ");
+      point2Save++;
+      point2Send = 0;
+  }
+}
+bool writeImuPoint(int idx) { 
+    //struct timeval tv;
+    //gettimeofday(&tv, NULL);
 
-            Point sensorImu("imu_data");
-            sensorImu.addTag("device", DEVICE);
-            sensorImu.addField("gyro.x", data.gyro.x);
-            sensorImu.addField("gyro.y", data.gyro.y);
-            sensorImu.addField("gyro.z", data.gyro.z);
-            sensorImu.setTime(getTimeStamp(&tv,3)); // WritePrecision::MS: 
-            //sensorImu.setTime(tnow);  //set the time
-            //sensorImu.setTime(WritePrecision::MS); //  Sets the timestamp to the actual time in the desired precision
-            if (!client.writePoint(sensorImu)) {
-                M5_LOGE("InfluxDB write failed: %s",
-                        client.getLastErrorMessage().c_str());
-            }
-            else {
-
-                M5.Display.setCursor(0, 100);
-                dsp.printf("                              ");
-                M5.Display.setCursor(0, 100);
-                //M5.Display.print("Gyro X:%.1f Y:%.1f  Y:%.1f", data.gyro.x,
-                dsp.printf("Gyro X:%.1f Y:%.1f  Y:%.1f", data.gyro.x,
-                       data.gyro.y, data.gyro.z);
-                point2Send--;
-            }
-        }
+    /*
+    struct timeval tv_point;
+    memcpy(&tv_point, &tv_data[idx], sizeof(struct timeval));
+    timeval_add();
+    */
+    Point sensorImu("imu_data");
+    sensorImu.addTag("device", DEVICE);
+    sensorImu.addField("gyro.x", imuData[idx].gyro.x);
+    sensorImu.addField("gyro.y", imuData[idx].gyro.y);
+    sensorImu.addField("gyro.z", imuData[idx].gyro.z);
+    sensorImu.setTime(getTimeStamp(&tv_data[idx], 6)); // WritePrecision::uS: 
+    return client.writePoint(sensorImu);
+}
+                                            //
+void writeWifiPoint() { 
+    // Write point
+    iflxSensor.addField("rssi", WiFi.RSSI());
+    if (!client.writePoint(iflxSensor)) {
+        M5_LOGE("InfluxDB write failed: %s",
+                client.getLastErrorMessage().c_str());
     }
-    else
-         M5_LOGW("IMU reporting skipped due to communication issues");
+    // Clear fields for next usage. Tags remain the same.
+    iflxSensor.clearFields();
+    M5_LOGI("Flushing Wifi data into InfluxDB");
+    if (!client.flushBuffer()) {
+        M5_LOGW("InfluxDB flush failed: %s",
+                client.getLastErrorMessage().c_str());
+        M5_LOGE("Full buffer: %d",
+                client.isBufferFull());
+        // ? "Yes" : "No");
+    }
+
+}
+void loop(void)
+{
+  static uint32_t next_sec = 0;
+  int32_t sec = millis() / 1000;
+
+  loopImu();
+  M5.update();
+
+  // Calibration is initiated when a button or screen is clicked.
+  if (M5.BtnA.wasClicked() ){
+      M5_LOGW("M5.BtnA.wasClicked Starting ACQ");
+
+      if (point2Save >= MAX_POINTS) {
+          point2Save = 0; // Start Saving
+          //struct timeval tv_now;
+          gettimeofday(&tv_start, NULL);
+          //time_start_us = (int64_t)tv_now.tv_sec * 1000000L + (int64_t)tv_now.tv_usec;
+          next_usec = time_in_us(&tv_start);
+          //next_usec = micros() + (5 * 50 * 1000);
+      }
+      next_sec = millis() / 1000 + 10; // delay InfluxDB Flush 10 sec
+  }
+  else if (M5.BtnPWR.wasClicked() || M5.Touch.getDetail().wasClicked())
+  {
+      M5_LOGW("M5.BtnB.wasClicked Starting Calibration");
+      startCalibration();
+  }
+  else if ( point2Send < MAX_POINTS) {
+      if (writeImuPoint(point2Send)) {
+              M5_LOGI("Imu:: %d, %lu", point2Send, 
+                      time_in_us(&tv_data[point2Send]));//:%d  frame:%d", sec, frame_count);
+              point2Send++;
+      }
+      else 
+          M5_LOGE("InfluxDB write failed: %s",
+                  client.getLastErrorMessage().c_str());
+          
+  }
+
+  else if (sec >= next_sec)
+  {
+      // ESP32 internal timer
+      auto t = time(nullptr);
+      {
+          auto tm = gmtime(&t);    // for UTC.
+          //M5.Display.setCursor(0,20);
+          M5.Log.printf("ESP32 UTC  :%04d/%02d/%02d (%s)  %02d:%02d:%02d\r\n",
+                  tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
+                  wd[tm->tm_wday],
+                  tm->tm_hour, tm->tm_min, tm->tm_sec);
+      }
+                                //M5.Display.setCursor(0,20);
+      //M5.Log.printf("IDB Point UTC  %s:", tC.c_str());
+      next_sec = sec + 10;
+      if (calib_countdown)
+      {
+          updateCalibration(calib_countdown - 1);
+      }
+      if (wifiMulti.run() != WL_CONNECTED) {
+          M5_LOGE("Wifi connection lost");
+      }
+      else  
+          writeWifiPoint(); 
+  }
+  if ((sec & 7) == 0)
+  { // prevent WDT.
+      vTaskDelay(1);
+  }
+}
 /*
+  switch (imu_type)
+  {
+  case m5::imu_none:        name = "not found";   break;
+  case m5::imu_sh200q:      name = "sh200q";      break;
+  case m5::imu_mpu6050:     name = "mpu6050";     break;
+  case m5::imu_mpu6886:     name = "mpu6886";     break;
+  case m5::imu_mpu9250:     name = "mpu9250";     break;
+  case m5::imu_bmi270:      name = "bmi270";      break;
+  default:                  name = "unknown";     break;
+  };
+  M5_LOGI("imu:%s", name);
+  M5.Display.setCursor(0,20);
+  M5.Display.printf("imu:%s", name);
+
+  if (imu_type == m5::imu_none)
+  {
+    for (;;) { delay(1); }
+  }
     // The data obtained by getImuData can be used as follows.
     data.accel.x;      // accel x-axis value.
     data.accel.y;      // accel y-axis value.
@@ -465,80 +558,3 @@ void loop(void)
     M5_LOGV("gx:%f  gy:%f  gz:%f", data.gyro.x , data.gyro.y , data.gyro.z );
     M5_LOGV("mx:%f  my:%f  mz:%f", data.mag.x  , data.mag.y  , data.mag.z  );
 */
-    ++frame_count;
-  }
-  else
-  {
-    M5.update();
-
-    // Calibration is initiated when a button or screen is clicked.
-    if (M5.BtnA.wasClicked() ){
-        M5_LOGW("M5.BtnA.wasClicked Starting ACQ");
-        point2Send = MAX_POINT_SIZE ;
-        next_sec = millis() / 1000 + 10; // delay InfluxDB Flush 10 sec
-    }
-    if (M5.BtnPWR.wasClicked() || M5.Touch.getDetail().wasClicked())
-    {
-      startCalibration();
-    }
-  }
-
-  int32_t sec = millis() / 1000;
-  if (sec >= next_sec)
-  {
-      // ESP32 internal timer
-      auto t = time(nullptr);
-      {
-          auto tm = gmtime(&t);    // for UTC.
-          //M5.Display.setCursor(0,20);
-          M5.Log.printf("ESP32 UTC  :%04d/%02d/%02d (%s)  %02d:%02d:%02d\r\n",
-                  tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
-                  wd[tm->tm_wday],
-                  tm->tm_hour, tm->tm_min, tm->tm_sec);
-      }
-      String tC = iflxSensor.getTime();
-                                //M5.Display.setCursor(0,20);
-      //M5.Log.printf("IDB Point UTC  %s:", tC.c_str());
-      next_sec = sec + 2 ;
-      M5_LOGI("sec:%d  frame:%d", sec, frame_count);
-      frame_count = 0;
-
-      if (calib_countdown)
-      {
-          updateCalibration(calib_countdown - 1);
-      }
-    //iflxSensor.clearFields();
-  
-    // Store measured value into point
-    // Report RSSI of currently connected network
-    // [ 13140][W][main.cpp:424] loop(): InfluxDB flush failed: {"code":"unprocessable entity","message":"failure writing points to database: partial write: points beyond retention policy dropped=1"}
-      //iflxSensor.setTime(time(nullptr));
-      iflxSensor.addField("rssi", WiFi.RSSI());
-      // Check WiFi connection and reconnect if needed
-      if (wifiMulti.run() != WL_CONNECTED) {
-          M5_LOGE("Wifi connection lost");
-      }
-      else { 
-          // Write point
-          if (!client.writePoint(iflxSensor)) {
-              M5_LOGE("InfluxDB write failed: %s",
-                      client.getLastErrorMessage().c_str());
-          }
-          // Clear fields for next usage. Tags remain the same.
-          iflxSensor.clearFields();
-          M5_LOGI("Flushing data into InfluxDB");
-          if (!client.flushBuffer()) {
-              M5_LOGW("InfluxDB flush failed: %s",
-                      client.getLastErrorMessage().c_str());
-              M5_LOGE("Full buffer: %d",
-                      client.isBufferFull());
-              // ? "Yes" : "No");
-          }
-
-      }
-      if ((sec & 7) == 0)
-      { // prevent WDT.
-          vTaskDelay(1);
-      }
-  }
-}
