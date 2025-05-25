@@ -24,11 +24,13 @@
 
 \begin{abstract}
 This demo describes a new concept in the development of Physics Laboratory experiments 
- following  the Do-It-Yourself (DYI) philosophy, showing to students that sophisticated experiments may be conducted using off-the-self electronic equipment.
+ following  the Do-It-Yourself (DIY) philosophy, showing to students that sophisticated experiments may be conducted using off-the-self electronic equipment.
 It also provides with an University teaching staff an increased flexibility in preparing and conducting experiments. 
 This does not aim to replace traditional laboratory experiments which resort to more sophisticated and dedicated equipment,
-but instead to complement such experiments with more simplified experiments that may be setup on an as needed basis.
-The authors will present at the exhibition one or two live experiments, and the participants will be invited to play 
+but instead to complement such lab formal procedures with more simplified assignments that may be setup on an as-needed basis, 
+and giving more space to student's creativity.
+The authors will present at the exhibition live experiments (Maxwell Wheel Inertial Momentum and Calorimetry measurements), and the Conference 
+participants will be invited to play 
 and take measurements of physical quantities with great precision.
 
 \end{abstract}
@@ -39,12 +41,15 @@ Physics, Laboratory Experiments, Remote Control, Online Data.
 
 \section{Introduction}
 % Framework
-The availability of widespread, cheap, and relatively powerful electronic devices provides for unique and exciting opportunities for developing flexible, ``off-the-shelf'' laboratory experiments where a suite of diagnostics can be deployed to monitor and instrument generic devices under study.
+The availability of widespread, cheap, and relatively powerful electronic devices provides for unique and exciting opportunities for developing flexible, 
+``off-the-shelf'' laboratory experiments where a suite of diagnostics can be deployed to monitor and instrument generic devices under study.
 
-Besides the ubiquitous, low-level diagnostics available in the laboratory environment (such as multi-meters, or even generic, low cost oscilloscopes), it is now possible to develop very cheap and reliable diagnostic devices to measure quantities such as  
-Temperatures, Pressure, Force, Magnetic field, Electric ($V$, $I$ and $R$), Movement, Sound, etc (e.g. a kit box with more than 50 sensors can be bought online for $<$ 10€).
+Besides the ubiquitous, low-level diagnostics available in the laboratory environment (such as multi-meters, or even generic, low cost oscilloscopes), 
+it is now possible to develop very cheap and reliable diagnostic devices to measure quantities such as  
+Temperatures, Pressure, Force, Magnetic field, Electric ($V$, $I$ and $R$), Movement, Sound, etc. 
+(As a exmple a box kit with more than 50 sensors can be bought online for $<$ 10€).
 
-In addition to this we now have access to cheap and rugged "embedded computer” solutions, chiefly the Raspberry-Pi, Arduino\cite{b2} and compatible suites.
+In addition to this we now have access to cheap and rugged "embedded computer” solutions, chiefly the Raspberry-Pi, Arduino and compatible suites.
 These allow for a fully customized, dedicated online connected computer capable of handling very reasonable acquisition rates (around 10kHz) 
 and delivering the resulting data in electronic form. 
 The experimental data can be upload to open databases and the students can easily retrieve 
@@ -55,42 +60,43 @@ The main objectives were to develop an open ecosystem with a flexible, low-cost 
 
 \section{Architecture}
 The hardware backbone for this platform consists in a combination of a Raspberry-Pi (RPi) board computer and an Arduino compatible board. 
-The Rpi will host all the developing  apps, communications infrastructure, database server, online servers (Apache, Grafana). 
+The Rpi will host all the developing apps, communications infrastructure, database server, online servers (Apache, Grafana). 
  A cabled Ethernet connection is preferable, but not  required, since the RPi is able to use an Wifi connection, 
- for example using the "Hop-Spot" function on the instructor’s smartphone, also shared to the student’s phones or mobile PCs.
+ for example using the "Hot-Spot" function on the instructor’s smartphone, also shared to the student’s phones or mobile PCs.
 
- The experiment sensor's will be connected to an Arduino board, or compatible.
+ The experiment sensor's will be connected to an Arduino board or compatible using I2C, SPI, Onw-Wire, or analog interfaces.
  Most promising and cost effective units presently are the ESP32 micro-controller based devices, in particular the M5Stick-CP2,
- that are fully wireless, since include a battery and connect directly to Wifi.
+ that are fully wireless, since include a battery and can connect directly to Wifi.
  %(An example is shown in `Fig.~\ref{figM5}'')
 
  Two different architectures are envisaged, one Unitary is used by the instructor during regular classes, 
  and one Multiple (``Fig.~\ref{figMultiple}''),
  where a complete hardware kit is lend to groups/individuals. 
- In both configurations all experimental data is stored in Cloud-based Time Series Database\cite{b3} (TSDB).
+ In both configurations all experimental data is stored in Cloud-based Time Series Database\cite{b3}.
  
-\begin{figure}[htbp]
-\centerline{\includegraphics[width=.6\columnwidth]{Multiple.png}}
-\caption{Several groups perform the experiment in class and upload the results to a server.}
+\begin{figure*}[tbp]
+\centerline{\includegraphics[width=1.4\columnwidth]{Multiple.png}}
+\caption{General Architecture of the experimental platform. Several groups perform the experiment in class and upload the results to a server.}
 \label{figMultiple}
-\end{figure}
+\end{figure*}
 
 The two computing boards plus all the hardware necessary to assemble a specific Experiment, will placed in stackable briefcases.
 %used to transport each individual set of experiments.
-Each briefcase size is “1 Storage Unit” (1SU), allowing easy and flexible transportation of up to 4-5 sets of experiments with a small trolley.
+Each briefcase size is standart “1 Storage Unit” ($\approx \SI{0.2}{\meter}$), allowing easy and flexible transportation of up to 4-5 sets of experiments with a small trolley.
 
 
 \section{Applications}
 The equipment is to be applied to a very wide range of experiments, ranging from under-graduate courses laboratory experiments (fundamental physics), 
 to more advanced experiments in master courses. 
 But most of all, the equipment is to have robust and well-maintained documentation, 
-following the best “Open” software/hardware practices, encouraging users to come up with novel experiments.
+following the best ``Open'' software/hardware practices, encouraging users to come up with novel experiments.
 
 A live library of experiments, with a description of the selected instrumentation, and the associated tailored code will be maintained and made available in a seamless fashion. 
 This means for example providing dedicated ISO’s that only require flashing on the Raspberry/Arduino SD cards, after which the diagnostic setup is ready for deployment,
 or a more sophisticated option of providing a library of configurations of the chip to be loaded on a case-by-case basis.
 
-Each experiment would have an associated laboratory guide, either in PDF, or wiki form (or both) and one or more Jupyter\cite{b4} Notebooks ready to be used by students. 
+Each experiment would have an associated laboratory guide, either in PDF, or wiki form (or both) and Jupyter Notebooks containing 
+the introductory theory and formulas and python code ready to be explored and completed by students. 
 
 A dedicated platform for exchange of information/code/documentation/etc. was developed and hosted on a public Github\cite{gh} repository. 
 At later stages of the project, after successful proof-of-concept deployments of the sensor suite, more experiment will be added.
@@ -98,9 +104,10 @@ At later stages of the project, after successful proof-of-concept deployments of
 
 \section{Pilot Experiments}
 A demo prototype was assembled and was already used in a initial set of Laboratory demonstrations. 
-All demos were concluded at  undergraduate engineering IST (See ``Tab.~\ref{tab1}''), in the first part of regular classes (about 30 minutes each).
-The feedback from students were strongly motivating and the suggestion that groups could experiment themselves 
-or even bring then home the kit was seen as very attractive.
+All demos were concluded at undergraduate engineering IST (See ``Table.~\ref{tab1}''), 
+in the first part of regular classes (about 30 minutes each) in front of circa 15 students.
+The feedback was, as transmitted by their delegate was strongly motivating. The suggestion that groups could experiment themselves 
+or even bring the kits home was highly praised.
 
 \begin{table}[htbp]
 \caption{List of Pilot Experiments}
@@ -121,14 +128,14 @@ Civil Eng. & 2nd&  Thermodynamics & Stirling Engine\\
 \end{table}
 
 \subsection{Maxwell Wheel Experiment}
-The Maxwell Wheel is a introductory Physics Lab project\cite{b6} where the students are 
+The Maxwell Wheel is a introductory Physics Lab project\cite{b5,b6} where the students are 
 invited to estimate the Wheel's Inertial Momentum  $I_z$,
 to do so they must perform a long and time consuming measurement series of time and velocity, 
 in different positions. 
 The apparatus is depicted in ``Fig.~\ref{figMaxwell}''.
 
 \begin{figure}[htbp]
-    \centerline{\includegraphics[width=.6\columnwidth]{maxwell.png}}
+    \centerline{\includegraphics[width=.7\columnwidth]{maxwell.png}}
     \caption{Maxwell Wheel standart Apparatus, showing a single light barrier. Students have to change barrier for each measure point.}
 \label{figMaxwell}
 \end{figure}
@@ -152,13 +159,14 @@ Assuming Energy is kept constant, due the small attained linear speeds, we get:
      Iz &=&  m \frac{ g  r  - \gamma  r^2  }{\gamma}\label{eq:maxIz}
 \end{IEEEeqnarray}
 
-Traditionally the positions and velocity are measured  with the help of an optical barrier, that has to be moved in small steps (``Fig.~\ref{figMaxwell}''). 
-The triggering device is fragile, often fails which disturb student's attention. 
+Traditionally, the positions and velocity are measured  with the help of an optical barrier, that has to be moved in small steps ( a rule is depicted in``Fig.~\ref{figMaxwell}''). 
+The triggering device is fragile and prone to failures, which disturb student's attention and deteriorate the learning experience.
 
-Using this novel platform a small M5Stick/Arduino is attached close to the wheel's axis.
-The acquisition  cycle is started for a defined interval and the wheel is left to fall. No electronic trigger is necessary, since the data in taken continuously.
-The small board, while showing the value bars on  display, and sends 
- the 6 signals of the inertial measurement unit (IMU) (speed of rotation and gravity vector 3D components). The values are stored in a InfluxDB server hosted in the Rpi. 
+Using this modern platform, a small M5Stick/Arduino is attached close to the wheel's axis.
+The acquisition  cycle is started for a defined time interval and the wheel is left to fall. No electronic trigger device is necessary, since the data in taken continuously for the full period.
+The device board acquires the data at a $\Delta T = \SI{50}{\milli\sec}$ sampling cycle, and sends 
+ the 6 signals of the inertial measurement unit (IMU) (angular velocity speed and gravity vector in relation to the device axis), via the Wifi interface. 
+ The values are stored in a InfluxDB server hosted in the Rpi. 
  A Grafana server\cite{b7} allows an user friendly plotting and retrieval tool, including in mobile devices, 
  without the need to install any App other than a plain Web Browser (``Fig.~\ref{figIMU}'').
 
@@ -166,23 +174,17 @@ On an single experiment run, a simple Linear Fit on the angular velocity data, g
 that could be used to validate other sparse data point taken with the barrier.
 
 
-\begin{figure}[htbp]
-\centerline{\includegraphics[width=.6\columnwidth]{IMUGrafana.png}}
-\caption{Browser screeshot showing the  plotting of rotation speed (top); and angle (bottom) of the Maxwell Wheel, stored in a Grafana server}.
+\begin{figure}[tbp]
+\centerline{\includegraphics[width=\columnwidth]{IMUGrafana.png}}
+\caption{Grafana online screenshot showing the plotting of rotation speed (top); and angle (bottom) of the Maxwell Wheel}.
 \label{figIMU}
 \end{figure}
 
 
 \subsection{Experimental results}
-The data values for the Z-direction angular velocity (parallel to the Wheel's axis) were extracted using a Jupyter Notebook, as shown in ``Fig.~\ref{figAngleVel}''. 
+The data values for the Z-direction angular velocity (parallel to the Wheel's axis) were extracted with a Jupyter Notebook, as shown in ``Fig.~\ref{figAngleVel}''. 
 
-\begin{figure}[htbp]
-\centerline{\includegraphics[width=.8\columnwidth]{AngAccel.png}}
-\caption{Angular velocity plot and Linear fit.}
-\label{figAngleVel}
-\end{figure}
-
-The Linear Regression on data is shown below. 
+The Linear Regression on data is shown below, depicting a low noisy signals, and linearity.  
 To calculate $p=95\%$ confidence interval on slope and intercept, we used a two-sided inverse Students t-distribution, with (N-2) degrees of freedom:
 
 \begin{itemize}
@@ -196,7 +198,14 @@ Finally, using ``(\eqref{eq:maxIz})'', the calculated Inertial Momentum was:
      Iz  = \SI{1.43e-3}{\kg\meter\squared}
 \end{equation}
 with a standard error of few $\mu\SI{}{\kg\meter\squared}$, well bellow the relative precision of any instrument used in the class laboratories.
+
   
+\begin{figure}[tbp]
+\centerline{\includegraphics[width=.9\columnwidth]{AngAccel.png}}
+\caption{Angular velocity plot and Linear fit.}
+\label{figAngleVel}
+\end{figure}
+
 %\si{8.85e-12}{\coulomb\squared\per\newton\per\meter\squared}$
 \section{Societal Impact in the Higher Teaching frame of reference}
 This pedagogical project may potentially have a significant societal impact on the way teaching is conducted in higher education institutions, 
@@ -210,20 +219,21 @@ More specifically this project adheres to a certain number of key constraints:
     \item Low-cost
 \end{itemize}
 
-To conclude, and to highlight the potential for internationalization, we announce that 
-this concept and prototype will be implemented at Teaching Unit @ Shangai University, Spring 2025
+To conclude, and to highlight the potential for internationalization, we report that 
+this concept and prototype will be implemented at Teaching Unit @ Shangai University in the Spring 2025a semester, distributing the 6 six Calorimetry kits to students.
 
 \begin{thebibliography}{00}
 \bibitem{b1}Giovanni Organtini, ``Physics Experiments with Arduino and Smartphones,''
 Springer International Publishing, January 2021, DOI: 10.1007/978-3-030-65140-4.
 
-Physics Department, IST, February 2024.
-\bibitem{b2} https://en.wikipedia.org/wiki/Arduino
-\bibitem{b3} https://en.wikipedia.org/wiki/InfluxDB
-\bibitem{b4} https://jupyter.org 
+\bibitem{b3} Nasar, M., Kausar, M. A.. Suitability of influxdb database for iot applications. International Journal of Innovative Technology and Exploring Engineering, 8(10), 1850-1857  (2019).
+%\bibitem{b3} https://en.wikipedia.org/wiki/InfluxDB
 \bibitem{gh} https://github.com/ipfn-hpl/ard-rasp-ist
+\bibitem{b5} Barbara Pecori, and Giacomo Torzo,  ``The Maxwell wheel investigated with MBL'', Phys. Teach. 36, 362–366 (1998), DOI: 10.1119/1.880109.
 \bibitem{b6}João Mendanha, et al, ``Mechanical Energy Conservation in Maxwell Wheel, Laboratory Guide,'' (in portuguese),
-\bibitem{b7} https://en.wikipedia.org/wiki/Grafana
+%\bibitem{b7} https://en.wikipedia.org/wiki/Grafana
+\bibitem{b7} Chakraborty, M., Kundan, A.P. (2021). Grafana. In: Monitoring Cloud-Native Applications. Apress, Berkeley, CA. DOI: 10.1007/978-1-4842-6888-9-6.
+%https://en.wikipedia.org/wiki/Grafana
 \end{thebibliography}
 
 \end{document}
