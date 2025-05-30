@@ -19,7 +19,19 @@
 \title{A Compact, Low-cost Sensor Suite  for Laboratory Experiments
 }
 
-\author{}
+\author{\IEEEauthorblockN{1\textsuperscript{st} Bernardo Carvalho}
+\IEEEauthorblockA{\textit{Instituto de Plasmas e Fusão Nuclear} \\
+\textit{Instituto Superior Técnico, Universidade de Lisboa} \\
+\textit{Av. Rovisco Pais 1, 1049-001 Lisboa, Portugal} \\
+bernardo.carvalho@tecnico.ulisboa.pt}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Mário Lino da Silva}
+\IEEEauthorblockA{\textit{Instituto de Plasmas e Fusão Nuclear} \\
+\textit{Instituto Superior Técnico, Universidade de Lisboa}\\
+\textit{Av. Rovisco Pais 1, 1049-001 Lisboa, Portugal}}
+}
+%Lisboa, Portugal }
+
 \maketitle
 
 \begin{abstract}
@@ -75,7 +87,7 @@ The Rpi will host all the developing apps, communications infrastructure, databa
  In both configurations all experimental data is stored in Cloud-based Time Series Database\cite{b3}.
  
 \begin{figure*}[tbp]
-\centerline{\includegraphics[width=1.4\columnwidth]{Multiple.png}}
+\centerline{\includegraphics[width=1.0\columnwidth]{Multiple.png}}
 \caption{General Architecture of the experimental platform. Several groups perform the experiment in class and upload the results to a server.}
 \label{figMultiple}
 \end{figure*}
@@ -110,7 +122,7 @@ The feedback was, as transmitted by their delegate was strongly motivating. The 
 or even bring the kits home was highly praised.
 
 \begin{table}[htbp]
-\caption{List of Pilot Experiments}
+\caption{Pilot Experiments list}
 \begin{center}
 \begin{tabular}{|c|c|c|c|}
 \hline
@@ -122,6 +134,12 @@ Civil Eng. & 2nd&  Thermodynamics & Stirling Engine\\
 \hline
  Electric Eng.& 1rst&  Physics (Mechanics) & Maxwell Wheel\\
 \hline
+ Inform. Eng.& 2nd & 
+    Electromagnetism & Ampere Law\\
+\hline
+ Inform. Eng.& 2nd & 
+    Electromagnetism& Faraday Law\\
+\hline
 \end{tabular}
 \label{tab1}
 \end{center}
@@ -132,15 +150,15 @@ The Maxwell Wheel is a introductory Physics Lab project\cite{b5,b6} where the st
 invited to estimate the Wheel's Inertial Momentum  $I_z$,
 to do so they must perform a long and time consuming measurement series of time and velocity, 
 in different positions. 
-The apparatus is depicted in ``Fig.~\ref{figMaxwell}''.
+The apparatus is picture in ``Fig.~\ref{figMaxwell}''.
 
 \begin{figure}[htbp]
-    \centerline{\includegraphics[width=.7\columnwidth]{maxwell.png}}
-    \caption{Maxwell Wheel standart Apparatus, showing a single light barrier. Students have to change barrier for each measure point.}
+    \centerline{\includegraphics[width=.6\columnwidth]{maxwell.png}}
+    \caption{Maxwell wheel standart Apparatus, showing a single light barrier. Students have to change barrier for each measure point.}
 \label{figMaxwell}
 \end{figure}
 
-While the wheel is  falling, the Mechanical Energy is described by :
+While the wheel is  falling, Mechanical Energy is described by :
 \begin{IEEEeqnarray}{lcr}
     E_{mec}  &=&   E_{pot} +  E_{cin} +  E_{rot} \label{eq:max}\\
      &=&   m g h + \frac{1}{2} m v^2 + \frac{1}{2}  I_z w^2 \label{eq:max1}
@@ -159,7 +177,7 @@ Assuming Energy is kept constant, due the small attained linear speeds, we get:
      Iz &=&  m \frac{ g  r  - \gamma  r^2  }{\gamma}\label{eq:maxIz}
 \end{IEEEeqnarray}
 
-Traditionally, the positions and velocity are measured  with the help of an optical barrier, that has to be moved in small steps ( a rule is depicted in``Fig.~\ref{figMaxwell}''). 
+Traditionally, the positions and velocity are measured  with the help of an optical barrier, that has to be moved in small steps ( a rule is depicted in ``Fig.~\ref{figMaxwell}''). 
 The triggering device is fragile and prone to failures, which disturb student's attention and deteriorate the learning experience.
 
 Using this modern platform, a small M5Stick/Arduino is attached close to the wheel's axis.
@@ -170,7 +188,7 @@ The device board acquires the data at a $\Delta T = \SI{50}{\milli\sec}$ samplin
  A Grafana server\cite{b7} allows an user friendly plotting and retrieval tool, including in mobile devices, 
  without the need to install any App other than a plain Web Browser (``Fig.~\ref{figIMU}'').
 
-On an single experiment run, a simple Linear Fit on the angular velocity data, gives a very precise value of the angular acceleration,
+On an single experiment run, a simple linear fit on the angular velocity data, gives a very precise value of the angular acceleration,
 that could be used to validate other sparse data point taken with the barrier.
 
 
@@ -193,7 +211,7 @@ To calculate $p=95\%$ confidence interval on slope and intercept, we used a two-
     \item Intercept : 0.2022 $\pm$ $\SI{0.0531}{\radian\per\second}$.
 \end{itemize}
 
-Finally, using ``(\eqref{eq:maxIz})'', the calculated Inertial Momentum was:
+Finally, using ``\eqref{eq:maxIz}'', the calculated Inertial Momentum was:
 \begin{equation}
      Iz  = \SI{1.43e-3}{\kg\meter\squared}
 \end{equation}
@@ -201,7 +219,7 @@ with a standard error of few $\mu\SI{}{\kg\meter\squared}$, well bellow the rela
 
   
 \begin{figure}[tbp]
-\centerline{\includegraphics[width=.9\columnwidth]{AngAccel.png}}
+\centerline{\includegraphics[width=.95\columnwidth]{AngAccel.png}}
 \caption{Angular velocity plot and Linear fit.}
 \label{figAngleVel}
 \end{figure}
@@ -211,13 +229,9 @@ with a standard error of few $\mu\SI{}{\kg\meter\squared}$, well bellow the rela
 This pedagogical project may potentially have a significant societal impact on the way teaching is conducted in higher education institutions, 
 by bringing pinpoint capacities for simple and flexible laboratory experiments in 
 teaching courses who may on a first approach not have considered the possibility for conducting experiments.
-More specifically this project adheres to a certain number of key constraints:
-\begin{itemize}
-    \item Portability
-    \item Flexibility
-    \item Availability
-    \item Low-cost
-\end{itemize}
+More specifically this project adheres to a certain number of key constraints, namelly i)  Portability; ii) Flexibility; iii) Availability and iv) Low-cost.
+%\begin{itemize}
+%\end{itemize}
 
 To conclude, and to highlight the potential for internationalization, we report that 
 this concept and prototype will be implemented at Teaching Unit @ Shangai University in the Spring 2025a semester, distributing the 6 six Calorimetry kits to students.
