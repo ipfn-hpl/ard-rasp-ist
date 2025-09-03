@@ -108,6 +108,12 @@ int64_t time_start_us;
 struct timeval tv_start;
 struct timeval tv_data[MAX_POINTS];
 int64_t next_usec = 0;
+static float last_accelx = 0.0;
+static float last_accely = 0.0;
+
+static float zero_accelx = 0.0;
+static float zero_accely = 0.0;
+static bool enableSave = false;
 
 int connect_wifi(int retries) {
     int status = WL_IDLE_STATUS; // the Wifi radio's status
@@ -382,6 +388,16 @@ void clearText(void)
     dsp.setCursor(rect_text_area.x + 2, rect_text_area.y + 1);
     dsp.setTextColor(TFT_WHITE, TFT_BLUE);
 }
+bool triggerSave(float dX, float dY){
+    float deltaX = dX - zero_accelx;
+    float deltaAngle = deltaX * deltaX;
+    float deltaY = dY - zero_accely;
+    deltaAngle = deltaY * deltaY;
+    if (deltaAngle > 0.5)
+        return true;
+    else
+        return false;
+}
 void loopImu(void)
 {
     struct timeval tv_now;
@@ -395,11 +411,14 @@ void loopImu(void)
         auto data = M5.Imu.getImuData();
         int64_t time_us = time_in_us(&tv_now);
         drawGraph(rect_graph_area, data);
+        last_accelx = data.accel.x;
+        last_accely = data.accel.y;
         if ( time_us > next_usec && point2Save < MAX_POINTS) {
             next_usec = time_us + (50 * 1000);
             //M5.Display.setCursor(0,10);
             //dsp.printf("              ");
             //M5.DiclearTextsplay.setCursor(0,10);
+            enableSave = triggerSave(data.accel.x, data.accel.y);
             clearText();
             dsp.printf("IMU %d", point2Save);
             // Obtain data on the current value of the IMU.
@@ -469,6 +488,9 @@ void loop(void)
 
         if (point2Save >= MAX_POINTS) {
             point2Save = 0; // Start Saving
+            zero_accelx = last_accelx;
+            zero_accely = last_accely;
+            enableSave = false;
             gettimeofday(&tv_start, NULL);
             //time_start_us = (int64_t)tv_now.tv_sec * 1000000L + (int64_t)tv_now.tv_usec;
             next_usec = time_in_us(&tv_start);
