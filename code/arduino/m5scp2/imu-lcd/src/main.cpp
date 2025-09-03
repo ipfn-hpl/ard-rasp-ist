@@ -108,12 +108,13 @@ int64_t time_start_us;
 struct timeval tv_start;
 struct timeval tv_data[MAX_POINTS];
 int64_t next_usec = 0;
-static float last_accelx = 0.0;
-static float last_accely = 0.0;
+float last_accelx = 0.0;
+float last_accely = 0.0;
 
 static float zero_accelx = 0.0;
 static float zero_accely = 0.0;
 static bool enableSave = false;
+const float triggerAngle = 0.6;
 
 int connect_wifi(int retries) {
     int status = WL_IDLE_STATUS; // the Wifi radio's status
@@ -392,8 +393,8 @@ bool triggerSave(float dX, float dY){
     float deltaX = dX - zero_accelx;
     float deltaAngle = deltaX * deltaX;
     float deltaY = dY - zero_accely;
-    deltaAngle = deltaY * deltaY;
-    if (deltaAngle > 0.5)
+    deltaAngle += deltaY * deltaY;
+    if (deltaAngle > triggerAngle)
         return true;
     else
         return false;
@@ -415,22 +416,20 @@ void loopImu(void)
         last_accely = data.accel.y;
         if ( time_us > next_usec && point2Save < MAX_POINTS) {
             next_usec = time_us + (50 * 1000);
-            //M5.Display.setCursor(0,10);
-            //dsp.printf("              ");
-            //M5.DiclearTextsplay.setCursor(0,10);
-            enableSave = triggerSave(data.accel.x, data.accel.y);
-            clearText();
-            dsp.printf("IMU %d", point2Save);
-            // Obtain data on the current value of the IMU.
-            //M5.Imu.getImuData(&imuData[point2Save]);
-            memcpy(&imuData[point2Save], &data, sizeof(m5::imu_data_t));
-            memcpy(&tv_data[point2Save], &tv_now, sizeof(struct timeval));
-            //unsigned long long getTimeStamp(struct timeval *tv, int secFracDigits = 3);
-            point2Save++;
+            if (enableSave) {
+                clearText();
+                dsp.printf("IMU %d", point2Save);
+                memcpy(&imuData[point2Save], &data, sizeof(m5::imu_data_t));
+                memcpy(&tv_data[point2Save], &tv_now, sizeof(struct timeval));
+                //unsigned long long getTimeStamp(struct timeval *tv, int secFracDigits = 3);
+                point2Save++;
+            }
+            else {
+                enableSave = triggerSave(data.accel.x, data.accel.y);
+            }
         }
     }
     else if (point2Save == MAX_POINTS) {
-        //M5_LOGW("Print ACQ");
         point2Save = MAX_POINTS+1;
         point2Send = 0;
     }
@@ -439,11 +438,6 @@ bool writeImuPoint(int idx) {
     //struct timeval tv;
     //gettimeofday(&tv, NULL);
 
-    /*
-       struct timeval tv_point;
-       memcpy(&tv_point, &tv_data[idx], sizeof(struct timeval));
-       timeval_add();
-       */
     Point sensorImu("imu_data");
     sensorImu.addTag("device", DEVICE);
     sensorImu.addField("gyro.x", imuData[idx].gyro.x);
@@ -496,7 +490,7 @@ void loop(void)
             next_usec = time_in_us(&tv_start);
             //next_usec = micros() + (5 * 50 * 1000);
             clearText();
-            dsp.printf("Start acq:%d ", MAX_POINTS);
+            dsp.printf("ARM acq:%d ", MAX_POINTS);
         }
         next_sec = millis() / 1000 + 10; // delay InfluxDB Flush 10 sec
     }
@@ -534,7 +528,7 @@ void loop(void)
         }
         //M5.Display.setCursor(0,20);
         //M5.Log.printf("IDB Point UTC  %s:", tC.c_str());
-        next_sec = sec + 10;
+        next_sec = sec + 20;
         if (calib_countdown)
         {
             updateCalibration(calib_countdown - 1);
