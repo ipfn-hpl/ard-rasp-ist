@@ -21,6 +21,8 @@
 
 #include "arduino_secrets.h"
 
+void clearText(void);
+
 #define DEVICE "ESP32"
 
 #define TZ_INFO "UTC0"
@@ -341,6 +343,8 @@ void setup(void)
     rect_graph_area = { 0, 0, w, graph_area_h };
     rect_text_area = {0, graph_area_h, w, text_area_h };
 
+    clearText();
+    dsp.printf("Starting M5Stick");
     // Read calibration values from NVS.
     if (!M5.Imu.loadOffsetFromNVS())
     {

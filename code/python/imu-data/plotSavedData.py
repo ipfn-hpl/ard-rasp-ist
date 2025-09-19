@@ -21,13 +21,12 @@ IF_URL = 'http://kane584.tecnico.ulisboa.pt:8086'
 IF_TOK = 'H1H3MkH8E3L_HUEDJRFLhQuFOyUWR87_bjvgqXda7KzZnzQF3aN4NQs9OrYTJixsqslcyAXsJzP4j41-uRiz4Q=='
 IF_ORG ='7ffb1a7998038e38'
 
-DATE = '2025-03-13'
-START = 'T14:39:00.100'
-STOP  = 'T14:40:00'
-RANGE = f'start:{DATE:s}{START:s}Z, stop:{DATE:s}{STOP:s}Z'
-query_iflx3 = (f'from(bucket:"ardu-rasp") |> range({RANGE}) '
-              '|> filter(fn: (r) => r._measurement == "imu_data" ) '        
-              '|> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")')
+# DATE = '2025-03-13'
+# START = 'T14:39:00.100'
+# STOP  = 'T14:40:00'
+DATE  = '2025-09-01'
+START = '13:47:00.100'
+STOP  = 'T13:48:00'
 
 def select_data(dataframe, date, start_time, end_time):
     t_time = dataframe['_time']
@@ -66,7 +65,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.setCentralWidget(cw)
         self.imuDf = self.getData(args.date, args.start, args.end)
-
+        self.pointsX = []
+        self.pointsY = []
 
         # exp_df = select_data(self.imuDf, args.date, args.start, args.end)
         exp_df = self.imuDf
@@ -88,12 +88,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pw1 = pw1
 
         monoRadio = QtWidgets.QRadioButton('mono')
-        rgbaRadio = QtWidgets.QRadioButton('rgba')
-        topXradio = QtWidgets.QRadioButton('topX')
-        gr_lay.addWidget(monoRadio, 0, 1)
-        gr_lay.addWidget(rgbaRadio, 1, 2)
-        gr_lay.addWidget(topXradio, 2, 2)
+        # gr_lay.addWidget(monoRadio, 0, 1)
+        # #gr_lay.addWidget(botXradio, 3, 1)
         monoRadio.setChecked(True)
+        combo = QtWidgets.QComboBox()
+        combo.addItems(['TopX', 'BotX', 'TopY', 'BotY'])
+        self.pointIdx = 0
+        combo.setCurrentIndex(self.pointIdx)
+        combo.currentIndexChanged.connect(self.index_changed)
+        gr_lay.addWidget(combo, 0, 1)
+        button = QtWidgets.QPushButton("Print Data!")
+        button.setCheckable(True)
+        button.clicked.connect(self.buttonWasClicked)
+        gr_lay.addWidget(button, 1, 1)
 
         # gr_lay.addWidget(widget=pw1, row=0, column=0,) #  rowSpan=2)
         gr_lay.addWidget(pw1, 0, 0, 3, 1)  # Row 1, Column 1, rowspan=2025widget=pw1, row=0, column=0,) #  rowSpan=2)
@@ -114,19 +121,45 @@ class MainWindow(QtWidgets.QMainWindow):
         # mouse_point = self.pw1.mapFromScene(scene_coords)
 
         print(f'clicked plot X: {mouse_point.x()}, Y: {mouse_point.y()}, event: {mouseClickEvent}')
+        match self.pointIdx:
+            case 0:
+                self.pointsX.append([mouse_point.x(), 1])
+            case 1:
+                self.pointsX.append([mouse_point.x(), -1])
+            case 2:
+                self.pointsY.append([mouse_point.y(), 1])
+            case 3:
+                self.pointsY.append([mouse_point.y(), -1])
+            # If an exact match is not confirmed, this last case will be used if provided
+            case _:
+                return "Something's wrong with the internet"
 
     def getData(self, date, start, end):
-        RANGE = f'start:{date:s}{start:s}Z, stop:{date:s}{end:s}Z'
+        RANGE = f'start:{date:s}T{start:s}Z, stop:{date:s}{end:s}Z'
         query_iflx = (f'from(bucket:"ardu-rasp") |> range({RANGE}) '
                       '|> filter(fn: (r) => r._measurement == "imu_data" ) '        
                       '|> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")')
-        imu_df = self.query_api.query_data_frame(query=query_iflx)
-        imu_df.head()
+        try:
+            imu_df = self.query_api.query_data_frame(query=query_iflx)
+            imu_df.head()
+        except:
+        # except ConnectionError
+            print('ConnectTimeoutError')
+            return
         return imu_df
 
+    def index_changed(self, i): # i is an int
+        print(i)
+        self.pointIdx = i
 
+    def buttonWasClicked(self):
+        A = np.array(self.pointsX)
+        print("X = np.", end='')
 
-
+        print(np.array_repr(A))
+        A = np.array(self.pointsY)
+        print("Y = ", end='')
+        print(np.array_repr(A))
 
 mkQApp("ColorBarItem Example")
 main_window = MainWindow()
