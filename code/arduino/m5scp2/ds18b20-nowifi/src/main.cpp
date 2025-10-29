@@ -9,25 +9,21 @@
 
 #include <Arduino.h>
 #include <M5Unified.h>
-#include <WiFiMulti.h>
+// #include <WiFiMulti.h>
 
 // Include the libraries we need
 #include <DallasTemperature.h>
 #include <OneWire.h>
 
-#include "Vrekrer_scpi_parser.h"
+// #include "Vrekrer_scpi_parser.h"
 
-#include <InfluxDbClient.h>
-#include <InfluxDbCloud.h>
-
-#include "arduino_secrets.h"
+// #include "arduino_secrets.h"
 
 #define DEVICE "ESP32"
 
 #define TZ_INFO "UTC"
 
-#define WIFI_RETRIES 20
-
+static auto &dsp = (M5.Display);
 /*
  * Include definition in include/arduino_secrets.h
  * eg.
@@ -35,17 +31,17 @@
 const char ssids[][16] = // 10 is the length of the longest string + 1 ( for the
 '\0' at the end )
 {
-        "MikroTok",
-        "ZZZ",
-        "Wifi_BBC"
+"MikroTok",
+"ZZZ",
+"Wifi_BBC"
 };
 
 const char pass[][16] = // 10 is the length of the longest string + 1 ( for the
 '\0' at the end )
 {
-        "XXXX",
-        "ZZZZ",
-        "ZZZZZ"
+"XXXX",
+"ZZZZ",
+"ZZZZZ"
 };
 #define INFLUXDB_URL ""
 #define INFLUXDB_TOKEN ""
@@ -57,32 +53,6 @@ const char pass[][16] = // 10 is the length of the longest string + 1 ( for the
 #define MAX_BATCH_SIZE 500
 // The recommended size is at least 2 x batch size.
 #define WRITE_BUFFER_SIZE 3 * MAX_BATCH_SIZE
-
-// Declare InfluxDB client instance with preconfigured InfluxCloud certificate
-InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET,
-                      INFLUXDB_TOKEN, InfluxDbCloud2CACert);
-
-// Declare Data point
-Point iflx_sensor("ds18b20Sensors");
-
-WiFiMulti wifiMulti;
-uint8_t WiFiStatus = WL_DISCONNECTED;
-/*
-typedef enum {
-  WL_NO_SHIELD = 255,  // for compatibility with WiFi Shield library
-  WL_STOPPED = 254,
-  WL_IDLE_STATUS = 0,
-  WL_NO_SSID_AVAIL = 1,
-  WL_SCAN_COMPLETED = 2,
-  WL_CONNECTED = 3,
-  WL_CONNECT_FAILED = 4,
-  WL_CONNECTION_LOST = 5,
-  WL_DISCONNECTED = 6
-} wl_status_t;
-
-*/
-
-SCPI_Parser esp32_instrument;
 
 // Data wire is plugged into port G33 on the M5Stick
 #define ONE_WIRE_BUS 33
@@ -101,12 +71,25 @@ DeviceAddress ds18Sensors[max_sensors];
 float sensorTemp[max_sensors];
 float sensorDiff = 0.0;
 int buttonState;
-
+/*
 // DeviceAddress redThermometer  = {0x28, 0xC0, 0x48, 0x8B, 0xB0, 0x23, 0x09,
 // 0xAF}; DeviceAddress blueThermometer  = {0x28, 0x0E, 0x21, 0xBA, 0xB2, 0x23,
 // 0x06, 0x08}; DeviceAddress redThermometer  =  {0x28, 0x46, 0x91, 0x46, 0xD4,
 // 0xB7, 0x1F, 0x7D}; DeviceAddress blueThermometer  = {0x28, 0x91, 0x8F, 0xCB,
 // 0xB0, 0x23, 0x9, 0x25};
+//
+
+DeviceAddress redThermometer = {0x28, 0xD4, 0xAD, 0x91, 0xB0, 0x24, 0x06, 0x2C};
+
+DeviceAddress blueThermometer = {0x28, 0x67, 0x03, 0x5E,
+                                 0x9B, 0x23, 0x09, 0x3A};
+DeviceAddress redThermometer = {0x28, 0x82, 0xB8, 0x46, 0xA1, 0x23, 0x06, 0x16};
+DeviceAddress blueThermometer = {0x28, 0x1B, 0xDC, 0x17,
+                                 0xB0, 0x24, 0x06, 0xE7};
+DeviceAddress blueThermometer = {0x28, 0x01, 0x22, 0x1D,
+                                 0xB0, 0x24, 0x06, 0x6C};
+DeviceAddress redThermometer = {0x28, 0xCB, 0xC9, 0x69, 0xB0, 0x24, 0x06, 0x30};
+*/
 
 DeviceAddress blueThermometer = {0x28, 0xAA, 0x2B, 0x56,
                                  0xA1, 0x23, 0x06, 0xC0};
@@ -115,7 +98,7 @@ DeviceAddress redThermometer = {0x28, 0xCE, 0x8D, 0x77, 0x9B, 0x23, 0x09, 0x7A};
 uint8_t dsCount = 0;
 
 const unsigned int samplingInterval =
-    5000; // how often to run the main loop (in ms)
+    2000; // how often to run the main loop (in ms)
 unsigned long previousMillis = 0;
 
 void update_display();
@@ -158,31 +141,6 @@ void cpyDtAddress(DeviceAddress dest, DeviceAddress src) {
   for (uint8_t i = 0; i < 8; i++) {
     dest[i] = src[i];
   }
-}
-
-void Identify(SCPI_C commands, SCPI_P parameters, Stream &interface) {
-  interface.println(F("IPFN,SCPI ESP32 Thermo,#00," VREKRER_SCPI_VERSION));
-  //*IDN? Suggested return string should be in the following format:
-  // "<vendor>,<model>,<serial number>,<firmware>"
-}
-
-bool setup_scpi() {
-  bool ok = true;
-  /*
-     To fix hash crashes, the hashing magic numbers can be changed before
-     registering commands.
-     Use prime numbers up to the SCPI_HASH_TYPE size.
-     */
-  esp32_instrument.hash_magic_number = 37; // Default value = 37
-  esp32_instrument.hash_magic_offset = 7;  // Default value = 7
-
-  /*
-     Timeout time can be changed even during program execution
-     See Error_Handling example for further details.
-     */
-  esp32_instrument.timeout = 10; // value in miliseconds. Default value = 10
-  esp32_instrument.RegisterCommand(F("*IDN?"), &Identify);
-  return ok;
 }
 
 bool init_dallas() {
@@ -229,43 +187,6 @@ unsigned setup_dallas() {
   return found;
 }
 
-bool connect_wifi() {
-  bool ret = false;
-  M5_LOGI(", Waiting for WiFi... ");
-  for (int i = 0; i < WIFI_RETRIES; i++) {
-    if (wifiMulti.run() != WL_CONNECTED) {
-      // while(wifiMulti.run() != WL_CONNECTED) {
-      M5_LOGW(".");
-      delay(500);
-    } else {
-      M5_LOGI(". WiFi connected. ");
-      M5_LOGI("IP address: ");
-      IPAddress ip = WiFi.localIP();
-      M5_LOGI("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-      // M5.Display.print("WiFi connected.");
-      ret = true;
-      break;
-    }
-  }
-  if (ret) {
-    // Accurate time is necessary for certificate validation and writing in
-    // batches We use the NTP servers in your area as provided by:
-    // https://www.pool.ntp.org/zone/ Syncing progress and the time will be
-    // printed to Serial.
-    timeSync(TZ_INFO, "ntp1.tecnico.ulisboa.pt", "pool.ntp.org");
-  } else
-    M5_LOGE(" Fail to connect WiF, giving up.");
-  return ret;
-}
-
-bool send_iflx_data() {
-  iflx_sensor.clearFields();
-  iflx_sensor.addField("tempRed", sensorTemp[0]);
-  iflx_sensor.addField("tempBlue", sensorTemp[1]);
-
-  return client.writePoint(iflx_sensor);
-}
-
 void setup() {
   bool ok = false;
 #if defined(ESP_PLATFORM)
@@ -289,16 +210,31 @@ void setup() {
 #endif
   auto cfg = M5.config();
   M5.begin(cfg);
+  dsp.setRotation(dsp.getRotation() ^ 1);
+  int32_t w = dsp.width();
+  int32_t h = dsp.height();
+  if (w < h) { /// Landscape mode.
+    dsp.setRotation(dsp.getRotation() ^ 1);
+    w = dsp.width();
+    h = dsp.height();
+  }
+  int32_t graph_area_h = ((h - 8) / 18) * 18;
+  int32_t text_area_h = h - graph_area_h;
+  M5_LOGI("dsp W, H:%d, %d", w, h);
   Serial.begin(115200);
-  M5.Display.setBrightness(25);
-  M5.Display.setRotation(1);
-  M5.Display.setTextColor(GREEN);
-  // Text alignment middle_center means aligning the center of the text to the
-  // specified coordinate position.
+  float fontsize = text_area_h / 8;
+  dsp.setTextSize(fontsize);
+  dsp.setColor(GREEN);
+  dsp.setTextColor(TFT_WHITE, TFT_BLUE);
+  dsp.printf("dsp W, H:%d, %d F%.2f", w, h, fontsize);
+  // M5.Display.setBrightness(25);
+  // M5.Display.setTextColor(GREEN);
+  //  Text alignment middle_center means aligning the center of the text to the
+  //  specified coordinate position.
 
-  M5.Display.setTextDatum(middle_center);
-  M5.Display.setFont(&fonts::FreeSans9pt7b);
-  M5.Display.setTextSize(1);
+  // M5.Display.setTextDatum(middle_center);
+  // M6.Display.setFont(&fonts::FreeSans9pt7b);
+  // M5.Display.setTextSize(1);
   update_display();
   /// You can set Log levels for each output destination.
   /// ESP_LOG_ERROR / ESP_LOG_WARN / ESP_LOG_INFO / ESP_LOG_DEBUG /
@@ -318,8 +254,6 @@ void setup() {
 
   // delay(1000);
 
-  // setup_scpi();
-
   init_dallas();
   if (setup_dallas() == 0) {
     if (!dt_oneWire.getAddress(ds18Sensors[0], 0))
@@ -331,90 +265,23 @@ void setup() {
     Serial.println("Device 1");
     printDtAddress(ds18Sensors[1]);
   }
-
-  M5_LOGI("Connecting to Rpi Wifi..");
-  wifiMulti.addAP("Labuino-rpi5", "Arduino25");
-  // connecting to  WiFi network
-  ok = false; // connect_wifi();
-  /*
-  if (ok) {
-      Serial.println("Rpi Wifi OK");
-  }
-  else {
-      M5_LOGW("Rpi Wifi Failed. Trying others.");
-       // clears the current list of Multi APs and frees the memory
-      //wifiMulti.APlistClean();
-
-      for(int i = 0; i < NUM_SSID; i++) {
-          wifiMulti.addAP(ssids[i], pass[i]);
-      }
-      ok = connect_wifi();
-  }
-  */
-  // Add constant tags - only once
-  if (ok) {
-    iflx_sensor.addTag("experiment", "calorimetryM5S");
-
-    // Check server connection
-    if (client.validateConnection()) {
-      Serial.print("Connected to InfluxDB: ");
-      Serial.println(client.getServerUrl());
-    } else {
-      Serial.print("InfluxDB connection failed: ");
-      Serial.println(client.getLastErrorMessage());
-    }
-  }
 }
-/*
-void update_display() {
-    // ColorLCD 135 x 240
-
-    if (!displayPaused) {
-        int percentage = getStableBatteryPercentage();
-        StickCP2.Display.clear();
-        StickCP2.Display.setCursor(10, 20);
-        StickCP2.Display.printf("BAT: %d%%", percentage);
-        StickCP2.Display.setCursor(120, 20);
-        //StickCP2.Display.setTextSize(0.7);
-        StickCP2.Display.printf("%dmV", StickCP2.Power.getBatteryVoltage());
-        StickCP2.Display.setCursor(10, 40);
-        if (WiFiStatus == WL_CONNECTED)
-            StickCP2.Display.printf("WiFi: Connected");
-        else
-            StickCP2.Display.printf("WiFi: %d", WiFiStatus);
-
-        StickCP2.Display.setCursor(10, 60);
-        StickCP2.Display.printf("T0: %.2f C", sensorTemp[0]);
-        StickCP2.Display.setCursor(120, 60);
-        StickCP2.Display.printf("T1: %.2f C", sensorTemp[1]);
-//        StickCP2.Display.printf("T0: %.2F T1: %.f\n", sensorTemp[0],
-sensorTemp[1]);
-        //StickCP2.Display.setTextSize(1);
-   }
-}
-*/
 void update_display() {
   // ColorLCD 135 x 240
 
   if (!displayPaused) {
     int percentage = getStableBatteryPercentage();
-    M5.Display.clear();
-    M5.Display.setCursor(0, 20);
-    M5.Display.printf("M5S BAT: %3d%%, %.2f V", percentage,
-                      M5.Power.getBatteryVoltage() / 1e3);
+    // M5.Display.clear();
+    dsp.clear();
+    dsp.setCursor(0, 20);
+    dsp.printf("M5S BAT: %3d%%, %.2f V", percentage,
+               M5.Power.getBatteryVoltage() / 1e3);
     // M5.Display.printf("%dmV",
-    M5.Display.setCursor(10, 40);
-    if (WiFiStatus == WL_CONNECTED) {
-      M5.Display.printf("WiFi: Connected ");
-      IPAddress ip = WiFi.localIP();
-      // M5.Display.printf(" %s", ip.toString());
-      M5.Display.printf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-    } else
-      M5.Display.printf("WiFi: %d", WiFiStatus);
-    M5.Display.setCursor(0, 60);
-    M5.Display.printf("Tr: %.2f Tb: %.2f ", sensorTemp[0], sensorTemp[1]);
+    // M5.Display.printf("WiFi: %d", WiFiStatus);
+    dsp.setCursor(0, 60);
+    dsp.printf("Tr: %.2f Tb: %.2f ", sensorTemp[0], sensorTemp[1]);
     if (sensorDiff != 0.0)
-      M5.Display.printf("Eq");
+      dsp.printf("Eq");
   }
 }
 
@@ -471,66 +338,21 @@ void loop() {
   if (currentMillis - previousMillis > samplingInterval) {
     previousMillis += samplingInterval;
     // call sensors.requestTemperatures() to issue a global temperature
-    WiFiStatus = wifiMulti.run();
+    // WiFiStatus = wifiMulti.run();
     dt_oneWire.requestTemperatures();
     sensorTemp[0] = dt_oneWire.getTempC(ds18Sensors[0]);
     sensorTemp[1] = dt_oneWire.getTempC(ds18Sensors[1]) - sensorDiff;
     M5_LOGI("Tred %.2f  Tblue: %.2f", sensorTemp[0], sensorTemp[1]);
     update_display();
-
-    if (wifiMulti.run() == WL_CONNECTED) {
-      // Write point
-      if (!send_iflx_data()) {
-        M5_LOGE("InfluxDB write failed: ");
-        Serial.println(client.getLastErrorMessage());
-      }
-    } else {
-      M5_LOGW("Wifi connection lost");
-      connect_wifi();
-    }
   }
 }
 
-/*
-void loop() {
-    unsigned long currentMillis = millis();
-    esp32_instrument.ProcessInput(Serial, "\n");
-    M5.update(); // Update button states
-    static int count_loop;
-    if (currentMillis - previousMillis > samplingInterval) {
-        previousMillis += samplingInterval;
-        // call sensors.requestTemperatures() to issue a global temperature
-        WiFiStatus = wifiMulti.run();
-        dt_oneWire.requestTemperatures();
-        sensorTemp[0] = dt_oneWire.getTempC(ds18Sensors[0]);
-        sensorTemp[1] = dt_oneWire.getTempC(ds18Sensors[1]);
-        update_display();
-        if ((count_loop++) %10 == 0) {
-            Serial.print("Temp0 C: ");
-            Serial.print(sensorTemp[0]);
-            Serial.print(", Temp1 C: ");
-            Serial.println(sensorTemp[1]);
-        }
+// if (StickCP2.BtnB.wasClicked()) {
+//     StickCP2.Display.clear();
+//     // StickCP2.Speaker.tone(8000, 20);
+// }
 
-        if (WiFiStatus != WL_CONNECTED) {
-            Serial.println("Wifi connection lost");
-        }
-        else if (!send_iflx_data()) {
-        // Write point
-            Serial.print("InfluxDB write failed: ");
-            Serial.println(client.getLastErrorMessage());
-        }
-
-    }
-    // if (StickCP2.BtnB.wasClicked()) {
-    //     StickCP2.Display.clear();
-    //     // StickCP2.Speaker.tone(8000, 20);
-    // }
-
-    // if (StickCP2.BtnA.wasPressed()) {
-    //     displayPaused = !displayPaused; // Toggle display update state
-    // }
-
-}
-*/
+// if (StickCP2.BtnA.wasPressed()) {
+//     displayPaused = !displayPaused; // Toggle display update state
+// }
 //  vim: syntax=cpp ts=4 sw=4 sts=4 sr et
