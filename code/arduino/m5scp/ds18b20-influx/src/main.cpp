@@ -102,8 +102,11 @@ int buttonState;
 
 //DeviceAddress redThermometer  = {0x28, 0xC0, 0x48, 0x8B, 0xB0, 0x23, 0x09, 0xAF};
 //DeviceAddress blueThermometer  = {0x28, 0x0E, 0x21, 0xBA, 0xB2, 0x23, 0x06, 0x08};
-DeviceAddress redThermometer  =  {0x28, 0x46, 0x91, 0x46, 0xD4, 0xB7, 0x1F, 0x7D};
-DeviceAddress blueThermometer  = {0x28, 0x91, 0x8F, 0xCB, 0xB0, 0x23, 0x9, 0x25};
+//DeviceAddress redThermometer  =  {0x28, 0x46, 0x91, 0x46, 0xD4, 0xB7, 0x1F, 0x7D};
+//DeviceAddress blueThermometer  = {0x28, 0x91, 0x8F, 0xCB, 0xB0, 0x23, 0x9, 0x25};
+
+DeviceAddress blueThermometer =  {0x28, 0xAA, 0x2B, 0x56, 0xA1, 0x23, 0x06, 0xC0};
+DeviceAddress redThermometer  = {0x28, 0xCE, 0x8D, 0x77, 0x9B, 0x23, 0x09, 0x7A};
 
 uint8_t dsCount = 0;
 
@@ -307,10 +310,22 @@ void setup() {
 
     //setup_scpi();
 
+    init_dallas();
+    if (setup_dallas() == 0){
+        if (!dt_oneWire.getAddress(ds18Sensors[0], 0))
+            Serial.println("Unable to find address for Device 0");
+        Serial.println("Device 0");
+        printDtAddress(ds18Sensors[0]);
+        if (!dt_oneWire.getAddress(ds18Sensors[1], 1))
+            Serial.println("Unable to find address for Device 1");
+        Serial.println("Device 1");
+        printDtAddress(ds18Sensors[1]);
+    }
+
     M5_LOGI("Connecting to Rpi Wifi..");
     wifiMulti.addAP("Labuino-rpi5", "Arduino25");
     // connecting to  WiFi network
-    ok = connect_wifi();
+    ok = false; //connect_wifi();
     if (ok) {
         Serial.println("Rpi Wifi OK");
     }
@@ -337,18 +352,6 @@ void setup() {
             Serial.println(client.getLastErrorMessage());
         }
     }
-    init_dallas();
-    if (setup_dallas() == 0){
-        if (!dt_oneWire.getAddress(ds18Sensors[0], 0))
-            Serial.println("Unable to find address for Device 0");
-        Serial.println("Device 0");
-        printDtAddress(ds18Sensors[0]);
-        if (!dt_oneWire.getAddress(ds18Sensors[1], 1))
-            Serial.println("Unable to find address for Device 1");
-        Serial.println("Device 1");
-        printDtAddress(ds18Sensors[1]);
-    }
-
 }
 /*
 void update_display() {
