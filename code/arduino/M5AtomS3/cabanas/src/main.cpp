@@ -19,7 +19,8 @@
 
 #include "arduino_secrets.h"
 
-#define DEVICE "M5AS3"
+// #define DEVICE "M5AS3"
+char device_buff[32];
 #define TZ_INFO "UTC0"
 
 #define WIFI_RETRIES 15
@@ -40,12 +41,25 @@ static constexpr const char *const wd[7] = {"Sun", "Mon", "Tue", "Wed",
 
 // The TinyGPSPlus object
 TinyGPSPlus gps;
+TinyGPSCustom zda(gps, "INZDA", 1);  // - Time and Date
+TinyGPSCustom mtw(gps, "INMTW", 1);  // Water Temperature
+                                     // TinyGPSCustom mtw(gps, "INMTW", 1); //
+TinyGPSCustom gcat(gps, "INGGA", 1); //
+TinyGPSCustom gllt(gps, "INGLL", 1); //- Geographic Position (latitude)
+TinyGPSCustom gllh(gps, "INGLL", 2); //- Geographic Position (N/S)
+
+TinyGPSCustom gllg(gps, "INGLL", 3); //- Geographic Position (longitude)
+
+TinyGPSCustom dpt(gps, "INDPT", 1); //- Depth
+                                    //
 static auto &dsp = (M5.Display);
 // Declare Data point
 Point iflxSensor("wifi_status");
 
 WiFiMulti wifiMulti;
 uint8_t WiFiStatus = WL_DISCONNECTED;
+
+float boatLat, boatLng, boatDepth;
 
 int connect_wifi(int retries) {
   int status = WL_IDLE_STATUS; // the Wifi radio's status
@@ -102,7 +116,35 @@ int connect_wifi(int retries) {
   }
   return status;
 }
+void updateBoatData() {
+  if (zda.isUpdated() || gllt.isUpdated() || gllg.isUpdated() ||
+      dpt.isUpdated()) {
 
+    boatLat = atof(gllt.value()) / 100.0;
+    boatLng = atof(gllg.value()) / 100.0;
+    boatDepth = atof(dpt.value());
+  }
+  if (gps.time.isUpdated()) {
+    if (gps.location.isValid()) {
+      boatLat = gps.location.lat();
+      boatLng = gps.location.lng();
+    }
+  }
+}
+void displayInfo() {
+
+  if (gps.time.isUpdated()) {
+    Serial.print(F("Location: "));
+    if (gps.location.isValid()) {
+      Serial.print(gps.location.lat(), 6);
+      Serial.print(F(","));
+      Serial.print(gps.location.lng(), 6);
+    } else {
+      Serial.print(F("INVALID"));
+    }
+    Serial.println();
+  }
+}
 // This custom version of delay() ensures that the gps object
 // is being "fed".
 static void smartDelay(unsigned long ms) {
@@ -113,7 +155,21 @@ static void smartDelay(unsigned long ms) {
   } while (millis() - start < ms);
 }
 
-void writeWifiPoint() {
+bool sendBoatPoint() {
+  Point sensorBoat("boatData");
+  sensorBoat.addTag("device", device_buff);
+  sensorBoat.addField("Lat", boatLat);
+  sensorBoat.addField("Lng", boatLng);
+  sensorBoat.addField("Depth", boatDepth);
+  if (!client.writePoint(sensorBoat)) {
+    M5_LOGE("InfluxDB write failed: %s", client.getLastErrorMessage().c_str());
+    return false;
+  }
+
+  return true;
+}
+
+void sendWifiPoint() {
   // Write point
   iflxSensor.addField("rssi", WiFi.RSSI());
   if (!client.writePoint(iflxSensor)) {
@@ -128,6 +184,7 @@ void writeWifiPoint() {
     // ? "Yes" : "No");
   }
 }
+
 void setup() {
   delay(1000);
   auto cfg = M5.config();
@@ -139,34 +196,38 @@ void setup() {
   dsp.setFont(&fonts::FreeSerifBold24pt7b);
   dsp.setTextSize(1);
   dsp.drawString("GPS", M5.Display.width() / 2, M5.Display.height() / 2);
-
-  if (!M5.Rtc.isEnabled()) {
-    M5.Log.println("RTC not found.");
-    for (;;) {
-      M5.delay(500);
-    }
-  }
-
-  M5.Log.println("RTC found.");
+  /*
+     if (!M5.Rtc.isEnabled()) {
+     M5.Log.println("RTC not found.");
+     for (;;) {
+     M5.delay(500);
+     }
+     } e
+     M5.Log.println("RTC found.");
+     */
   Serial2.begin(4800, SERIAL_8N1, 5, 6);
   Serial.println(F("Serial 2 connected"));
   for (int i = 0; i < NUM_SSID; i++) {
     wifiMulti.addAP(ssids[i], pass[i]);
   }
+  sprintf(device_buff, "M5AS3-%s", WiFi.macAddress().c_str());
   WiFiStatus = connect_wifi(WIFI_RETRIES);
   // Serial.println
   //  Add constant tags - only once
   delay(2000);
 
   // Add tags to the data point
-  iflxSensor.addTag("device", DEVICE);
+  iflxSensor.addTag("device", device_buff);
   iflxSensor.addTag("SSID", WiFi.SSID());
 }
 
 void loop() {
   static uint32_t next_sec = 0;
+  static uint32_t next_data = 0;
   int32_t sec = millis() / 1000;
   // loopNmea();
+  displayInfo();
+  updateBoatData();
   M5.update();
   if (sec >= next_sec) {
     // ESP32 internal timer
@@ -180,12 +241,17 @@ void loop() {
     }
     // M5.Display.setCursor(0,20);
     // M5.Log.printf("IDB Point UTC  %s:", tC.c_str());
-    next_sec = sec + 2;
+    next_sec = sec + 60;
     if (wifiMulti.run() != WL_CONNECTED) {
       M5_LOGE("Wifi connection lost");
     } else
-      writeWifiPoint();
+      sendWifiPoint();
   }
+  if (sec >= next_data) {
+    next_data = sec + 30;
+    sendBoatPoint();
+  }
+
   if ((sec & 7) == 0) { // prevent WDT.
     vTaskDelay(1);
   }
