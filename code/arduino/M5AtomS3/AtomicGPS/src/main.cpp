@@ -153,15 +153,15 @@ void setup() {
   M5.Display.drawString("GPS", M5.Display.width() / 2, M5.Display.height() / 2);
 
   M5.Log.println("RTC found.");
-  Serial.println(F("GPS data received: check wiring"));
-  // Serial2.begin(4800, SERIAL_8N1, 5, -1);
-  // https://github.com/m5stack/M5-ProductExampleCodes/blob/master/AtomBase/AtomicRS232/Arduino/AtomicRS232/AtomicRS232.ino
-  //   2363][E][esp32-hal-uart.c:285] uartSetPins(): UART2 set pins GPS data
-  //   received: check wiring
+  // Serial.println(F("GPS data received: check wiring"));
+  //  Serial2.begin(4800, SERIAL_8N1, 5, -1);
+  //  https://github.com/m5stack/M5-ProductExampleCodes/blob/master/AtomBase/AtomicRS232/Arduino/AtomicRS232/AtomicRS232.ino
+  //    2363][E][esp32-hal-uart.c:285] uartSetPins(): UART2 set pins GPS data
+  //    received: check wiring
 
   // Serial2.begin(4800, SERIAL_8N1, 22, 19);
   Serial2.begin(4800, SERIAL_8N1, 5, 6);
-  Serial.println(F("GPS data received: check wiring"));
+  Serial.println(F("Serial 2 connected"));
 }
 
 void loop() {
