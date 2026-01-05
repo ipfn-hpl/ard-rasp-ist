@@ -7,17 +7,19 @@
 #include <OneBitDisplay.h>
 
 // #include <SoftwareSerial.h>
-const byte rxPin = 2;
-const byte txPin = 3;
+// const byte rxPin = 2;
+// const byte txPin = 3;
 // SoftwareSerial mySerial(rxPin, txPin);
 
 #define SDA_PIN 5
 #define SCL_PIN 6
 #define LED_PIN 8
 #define BOOTSEL_PIN 9
+#define BUTTON_PIN BOOTSEL_PIN
+#define BUTTON_2_PIN 1 // GPIO1 is D1
 
 ONE_BIT_DISPLAY obd;
-bool bootState = true; // active low
+bool lastState = false; // active low
 bool ledState = true;
 const unsigned int samplingInterval = 1000;
 unsigned long previousMillis = 0;
@@ -40,12 +42,12 @@ void setup() {
   // pinMode(20, INPUT); // RX IN
 
   digitalWrite(LED_PIN, ledState); // LED off
-  pinMode(BOOTSEL_PIN, INPUT_PULLUP);
-  debouncePins(BOOTSEL_PIN, BOOTSEL_PIN);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  debouncePins(BUTTON_PIN, BUTTON_PIN);
   bool ok = false;
   Serial.begin(115200);
   Serial1.begin(CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, RX, TX);
-  CH9329_Keyboard.begin(Serial);
+  CH9329_Keyboard.begin(Serial1);
 
   // while (!Serial);
   //  wait for serial port to connect. Needed for native USB port only
@@ -53,24 +55,25 @@ void setup() {
 #if defined(ESP_PLATFORM)
   ESP_LOGE(TAG,
            "using ESP_LOGE error log."); // Critical errors, software module can
-                                         // not recover on its own
+  // not recover on its own
   ESP_LOGW(TAG,
            "using ESP_LOGW warn log."); // Error conditions from which recovery
-                                        // measures have been taken
-  ESP_LOGI(TAG, "using ESP_LOGI info log.");  // Information messages which
-                                              // describe normal flow of events
+  // measures have been taken
+  ESP_LOGI(TAG, "using ESP_LOGI info log."); // Information messages which
+  // describe normal flow of events
   ESP_LOGD(TAG, "using ESP_LOGD debug log."); // Extra information which is not
-                                              // necessary for normal use
-                                              // (values, pointers, sizes, etc).
+  // necessary for normal use
+  // (values, pointers, sizes, etc).
   ESP_LOGV(
       TAG,
       "using ESP_LOGV verbose log."); // Bigger chunks of debugging information,
-                                      // or frequent messages which can
-                                      // potentially flood the output.
+  // or frequent messages which can
+  // potentially flood the output.
 #endif
 
   // esp_log_level_set("*", ESP_LOG_VERBOSE);        // set all components to
   // ERROR level
+  delay(1000);
   esp_log_level_set("wifi", ESP_LOG_INFO); // enable WARN logs from WiFi stack
   log_i("hello world!");
   log_e("hello worldE!");
@@ -82,7 +85,18 @@ void loop() {
   unsigned long currentMillis = millis();
   // ledState = not ledState;
   // bootState = digitalRead(BOOTSEL_PIN);
-  bootState = debouncedDigitalRead(BOOTSEL_PIN);
+  bool bootState = debouncedDigitalRead(BUTTON_PIN);
+  if (!bootState) {
+    if (lastState) {
+      digitalWrite(LED_PIN, ledState); // LED off
+      ledState = !ledState;
+      ESP_LOGI(TAG, "Sending ENTER to Keyboard...");
+      // CH9329_Keyboard.print("ThisPassword");
+      CH9329_Keyboard.print("\n");
+      lastState = bootState;
+    }
+  } else
+    lastState = bootState;
   if (currentMillis - previousMillis > samplingInterval) {
     previousMillis = currentMillis;
     // call sensors.requestTemperatures() to issue a global temperature
@@ -92,15 +106,9 @@ void loop() {
     //         CH9329_DEFAULT_BAUDRATE, TX);
     // CH9329_Keyboard , RX: 20, TX:21
     // CH9329_DEFAULT_BAUDRATE: 9600
-    ESP_LOGI(TAG, "Sending 'Hello world'...");
     // Serial.println("Sending 'Hello world'...");
 
-    // delay(1000);
-    if (!bootState) {
-      digitalWrite(LED_PIN, ledState); // LED off
-      ledState = !ledState;
-      CH9329_Keyboard.print("ThisPasswordIsWeakLikeABaby");
-    }
+    ESP_LOGI(TAG, "Sending 'Hello world'...");
     // obd.setCursor(10, 20);
     // obd.println("Count Led...");
     obd.fillScreen(0);
@@ -108,8 +116,5 @@ void loop() {
     obd.print("Count=");
     obd.println(i++, DEC);
     obd.display();
-    // Serial.println("Sending Enter key...");
   }
 }
-
-//
