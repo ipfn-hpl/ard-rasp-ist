@@ -16,6 +16,7 @@
 #define LED_PIN 8
 #define BOOTSEL_PIN 9
 #define BUTTON_PIN BOOTSEL_PIN
+#define PIN_0V 0
 #define BUTTON_2_PIN 1 // GPIO1 is D1
 
 ONE_BIT_DISPLAY obd;
@@ -24,6 +25,7 @@ bool ledState = true;
 const unsigned int samplingInterval = 1000;
 unsigned long previousMillis = 0;
 static const char *TAG = "EspC3";
+unsigned int buttonCount = 0;
 
 void setup() {
 
@@ -42,8 +44,11 @@ void setup() {
   // pinMode(20, INPUT); // RX IN
 
   digitalWrite(LED_PIN, ledState); // LED off
+  pinMode(BUTTON_2_PIN, INPUT_PULLUP);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-  debouncePins(BUTTON_PIN, BUTTON_PIN);
+  debouncePins(BUTTON_2_PIN, BUTTON_PIN);
+  pinMode(PIN_0V, OUTPUT); // Low value pin
+  digitalWrite(PIN_0V, LOW);
   bool ok = false;
   Serial.begin(115200);
   Serial1.begin(CH9329_DEFAULT_BAUDRATE, SERIAL_8N1, RX, TX);
@@ -81,40 +86,39 @@ void setup() {
   ESP_LOGI(TAG, "CH9329_Keyboard Control Library Demo, RX: %d", RX);
 }
 void loop() {
-  static int i = 0;
   unsigned long currentMillis = millis();
   // ledState = not ledState;
   // bootState = digitalRead(BOOTSEL_PIN);
-  bool bootState = debouncedDigitalRead(BUTTON_PIN);
+  bool bootState =
+      debouncedDigitalRead(BUTTON_PIN) & debouncedDigitalRead(BUTTON_2_PIN);
   if (!bootState) {
     if (lastState) {
-      digitalWrite(LED_PIN, ledState); // LED off
-      ledState = !ledState;
       ESP_LOGI(TAG, "Sending ENTER to Keyboard...");
       // CH9329_Keyboard.print("ThisPassword");
       CH9329_Keyboard.print("\n");
       lastState = bootState;
+      buttonCount++;
     }
-  } else
+  } else {
     lastState = bootState;
+  }
   if (currentMillis - previousMillis > samplingInterval) {
     previousMillis = currentMillis;
-    // call sensors.requestTemperatures() to issue a global temperature
     //                iflxConnected  = false;
     // ESP_LOGI(TAG, "CH9329_Keyboard , RX: %d, TX:%d", RX, TX);
     // ESP_LOGI(TAG, "CH9329_Keyboard , CH9329_DEFAULT_BAUDRATE: %d, TX:%d",
     //         CH9329_DEFAULT_BAUDRATE, TX);
     // CH9329_Keyboard , RX: 20, TX:21
     // CH9329_DEFAULT_BAUDRATE: 9600
-    // Serial.println("Sending 'Hello world'...");
 
+    digitalWrite(LED_PIN, ledState); // LED off
+    ledState = !ledState;
     ESP_LOGI(TAG, "Sending 'Hello world'...");
     // obd.setCursor(10, 20);
-    // obd.println("Count Led...");
     obd.fillScreen(0);
     obd.setCursor(0, 12);
     obd.print("Count=");
-    obd.println(i++, DEC);
+    obd.println(buttonCount, DEC);
     obd.display();
   }
 }
