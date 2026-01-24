@@ -1,0 +1,5 @@
+numpy 
+pyaudio 
+PyQt6 
+pyqtgraph 
+scipy
