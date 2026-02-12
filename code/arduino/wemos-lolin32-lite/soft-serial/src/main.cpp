@@ -12,7 +12,7 @@
 // socat -u -x /dev/ttyUSB0,raw -
 //
 #include <Arduino.h>
-#include <SoftwareSerial.h>
+// #include <SoftwareSerial.h>
 
 #ifndef D5
 #if defined(ESP32)
@@ -38,13 +38,14 @@
 921600				    Ok.
 */
 auto &usbSerial = Serial;
-EspSoftwareSerial::UART softSerial;
+// EspSoftwareSerial::UART softSerial;
 
 uint64_t time_in_us(struct timeval *tv) {
   return (uint64_t)tv->tv_sec * 1000000L + (uint64_t)tv->tv_usec;
 }
 
-int16_t a[3];
+// int16_t a[3];
+char a[4];
 #define PERIOD (1000000.0 * 11.1)
 #define AMP 1500
 
@@ -55,6 +56,7 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 
   usbSerial.begin(115200);
+  Serial2.begin(921600, SERIAL_8O2, MYPORT_RX, MYPORT_TX);
   // Important: the buffer size optimizations here, in particular the isrBufSize
   // (11) that is only sufficiently large to hold a single word (up to start - 8
   // data - parity - stop), are on the basis that any char written to the
@@ -71,6 +73,7 @@ void setup() {
   // 95, 11); softSerial.begin(SOFT_BAUD_RATE, EspSoftwareSerial::SWSERIAL_8S1,
   // MYPORT_RX, MYPORT_TX, false); //, 95, 11);
   // 8Bit/Odd, Parity,Two stop bit
+  /*
   softSerial.begin(SOFT_BAUD_RATE, EspSoftwareSerial::SWSERIAL_8O2, MYPORT_RX,
                    MYPORT_TX, false); //, 95, 11);
   if (!softSerial) { // If the object did not initialize, then its configuration
@@ -80,7 +83,7 @@ void setup() {
   // testSerial.begin(BAUD_RATE, EspSoftwareSerial::SWSERIAL_8N1, D7, D8, false,
   // 95, 11); #ifdef HALFDUPLEX
   softSerial.enableIntTx(false);
-
+*/
   usbSerial.println(PSTR("\nSoftware serial test started"));
   /*
       for (char ch = ' '; ch <= 'z'; ch++) {
@@ -110,12 +113,18 @@ void serialLoop() {
     // a[1]++;
   }
   if (time_us > marte_next_usec) {
-
-    for (int i = 0; i < 3; i++) {
-      a[i] = AMP * sin(time_us / PERIOD);
-    }
+    // echo -ne "\xFE\xFF" >/
+    a[0] = 0x55;
+    a[1] = 0x55;
+    a[2] = 0x55;
+    a[3] = 0x55;
+    // a[1]++;
+    // a[1]++;
+    // for (int i = 0; i < 3; i++) {
+    //  a[i] = AMP * sin(time_us / PERIOD);
+    //}
     marte_next_usec = time_us + (100 * 1000);
-    softSerial.write(buffer, 3 * sizeof(int16_t));
+    Serial2.write(buffer, 4);
   }
 }
 
