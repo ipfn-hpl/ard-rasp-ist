@@ -58,7 +58,7 @@ class ChirpDistanceMeter:
         """Linear frequency-sweep chirp with Hanning envelope."""
         t = np.linspace(0, duration, int(self.SAMPLE_RATE * duration))
         chirp = np.sin(2 * np.pi * (f_start * t + (f_end - f_start) * t ** 2 / (2 * duration)))
-        chirp = chirp * np.hanning(len(chirp)) * 0.3
+        # chirp = chirp * np.hanning(len(chirp)) * 0.3
         return chirp.astype(np.float32)
 
     # ------------------------------------------------------------------
