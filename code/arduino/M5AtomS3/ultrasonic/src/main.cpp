@@ -27,15 +27,15 @@
 unsigned char buffer_RTT[4] = {0};
 uint8_t CS;
 // #define COM 0x55
-// #define COM 0xFF
-#define COM 0x00
+#define COM 0xFF
+// #define COM 0x00
 int Distance = 0;
 int distance_mm = 0;
 
 bool readSensor(int &dist);
 
 void setup() {
-  delay(1000);
+  // delay(100);
   auto cfg = M5.config();
   cfg.serial_baudrate = 115200;
   AtomS3.begin(cfg);
@@ -48,14 +48,15 @@ void setup() {
   // AtomS3.Display.setFont(&fonts::FreeSerifBold24pt7b);
   AtomS3.Display.setFont(&fonts::FreeMono9pt7b);
   AtomS3.Display.setTextSize(1);
-  AtomS3.Display.drawString("GPS", M5.Display.width() / 2,
+  AtomS3.Display.drawString("Sonar", M5.Display.width() / 2,
                             M5.Display.height() / 2);
 
   int textsize = AtomS3.Display.height() / 60;
   if (textsize == 0) {
     textsize = 1;
   }
-  AtomS3.Display.setTextSize(textsize);
+  // AtomS3.Display.setTextSize(textsize);
+  // Display.width: 128 Display.height 128
 
   M5.Log.println("RTC found.");
   // Serial.println(F("GPS data received: check wiring"));
@@ -64,8 +65,9 @@ void setup() {
 
   // Serial2.begin(4800, SERIAL_8N1, 22, 19);
   // Serial2.begin(4800, SERIAL_8N1, 5, 6);
-  Serial2.begin(115200, SERIAL_8N1, 5, 6);
-  Serial.println(F("Serial2 connected. Wait data"));
+  // Serial2.begin(115200, SERIAL_8N1, 5, 6);
+  Serial2.begin(115200, SERIAL_8N1, G2, G1);
+  M5.Log.println("Serial2 connected. Wait data");
 }
 int count = 0;
 
@@ -91,13 +93,17 @@ void loop() {
     */
   if (msecNow >= nextTime) {
     nextTime = msecNow + 500;
-    Serial2.write(COM);
+    // Serial2.write(COM);
     if (readSensor(distance_mm)) {
       Serial.print("Distance: ");
       Serial.print(distance_mm);
       Serial.print(" mm  (");
       Serial.print(distance_mm / 10.0, 1);
       Serial.println(" cm)");
+      AtomS3.Display.clear();
+      AtomS3.Display.drawString("Depth:" + String(distance_mm), 64, 30);
+      // M5.Display.width() / 2,
+      // M5.Display.height() / 2);
     } else {
       // Serial.println("Read error ");
       M5.Log.printf("Read error\n");
@@ -109,10 +115,21 @@ void loop() {
 
 bool readSensor(int &dist) {
   // Wait for header byte
-  unsigned long timeout = millis() + 500;
+  unsigned long timeout;
+  // Flush any existing data
+  while (Serial2.available() > 0) {
+    Serial2.read();
+    // yield();
+  }
+  Serial2.write(COM);
+  delay(8); // give sensor time to respond
+  timeout = millis() + 100;
   while (Serial2.available() < 1) {
     if (millis() > timeout) {
       M5.Log.printf("First Timeout ");
+      while (Serial2.available() > 0) {
+        M5.Log.printf("0x%02X\t", Serial2.read());
+      }
       return false;
     }
   }
@@ -125,9 +142,12 @@ bool readSensor(int &dist) {
       break;
     if (millis() > timeout) {
       M5.Log.printf("2 Timeout ");
+      while (Serial2.available() > 0) {
+        M5.Log.printf("0x%02X\t", Serial2.read());
+      }
       return false;
     }
-    Serial2.read(); // discard non-header bytes
+    // Serial2.read(); // discard non-header bytes
   }
 
   // Wait for full 4-byte frame
@@ -136,18 +156,23 @@ bool readSensor(int &dist) {
     // if (millis() > timeout) return false;
     if (millis() > timeout) {
       M5.Log.printf("3 Timeout ");
+      while (Serial2.available() > 0) {
+        M5.Log.printf("0x%02X\t", Serial2.read());
+      }
       return false;
     }
   }
 
   byte buf[4];
   Serial2.readBytes(buf, 4);
+  /*
   M5.Log.printf("Read 4 bytes ");
   for (int i = 0; i < 4; i++) {
     M5.Log.printf(" %d: 0x%02X\t", i, buf[i]);
     // Serial.printf("count:%d %d: 0x%02X\n", i, buffer_RTT[i]);
   }
   M5.Log.printf("\n");
+  */
 
   // Validate header
   if (buf[0] != 0xFF)
