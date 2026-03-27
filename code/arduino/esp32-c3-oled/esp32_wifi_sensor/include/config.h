@@ -49,7 +49,7 @@ static constexpr BaseType_t TASK_CORE_LED = 0;  // share Core 0 with WiFi
 // #define SENSOR_TYPE      DHT22
 // Built-in LED on most ESP32 DevKit boards is GPIO 2.
 // Change to match your board or an external LED pin.
-#define LED_ON HIGH // flip to LOW if your LED is active-low
+#define LED_ON LOW // HIGH // flip to LOW if your LED is active-low
 // Need to explicitly set the I2C pin numbers on this C3 board
 #define SDA_PIN 5
 #define SCL_PIN 6

@@ -115,8 +115,26 @@ struct SensorData {
 
 static SensorData g_sensor;
 static SemaphoreHandle_t g_sensorMutex = nullptr;
-static WiFiMulti g_wifiMulti;
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Display state  (written by sensor/WiFi tasks, read by taskDisplay)
+// ══════════════════════════════════════════════════════════════════════════════
+
+struct DisplayData {
+  char distance_mm[12] = "---"; // "23.4 C"
+  char ssid[24] = "---";
+  char ip[18] = "---";
+  char influxStatus[20] = "---"; // "OK 204" / "ERR" / "No WiFi"
+  uint32_t uptimeSec = 0;
+};
+
+static DisplayData g_display;
+static SemaphoreHandle_t g_displayMutex = nullptr;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WiFi + InfluxDB globals
+// ══════════════════════════════════════════════════════════════════════════════
+static WiFiMulti g_wifiMulti;
 // ── InfluxDB v2 client (constructed once, reused across writes) ────────────
 static InfluxDBClient
     g_influx(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN
@@ -125,6 +143,14 @@ static InfluxDBClient
              InfluxDbCloud2CACert // bundle from InfluxDbCloud.h
 #endif
     );
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OneBitDisplay instance
+// -1 for reset pin = no hard reset line wired (typical for I2C breakouts).
+// Uses Arduino Wire; pins are configured in obdI2CInit().
+// ══════════════════════════════════════════════════════════════════════════════
+
+OBDISP g_obd;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sensor abstraction — replace stub with your real library
